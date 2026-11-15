@@ -10,6 +10,11 @@
 :root{--bg:#080b12;--panel:#101722;--panel2:#141e2c;--gold:#e9b84f;--gold2:#ffdf91;--blue:#43a9ff;--muted:#a8b2c2;--line:rgba(233,184,79,.2);--white:#f7f8fb}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 50% -20%,#172b43 0,transparent 48%),var(--bg);color:var(--white);font-family:Tahoma,Arial,sans-serif;line-height:1.8}
 a{color:inherit;text-decoration:none}.wrap{width:min(1160px,92%);margin:auto}.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid rgba(255,255,255,.08)}.brand{display:flex;align-items:center;gap:12px;font-weight:800}.brand img{width:48px;height:48px;object-fit:cover;border-radius:50%;border:1px solid var(--gold)}.brand small{display:block;color:var(--gold);font-size:10px;letter-spacing:2px;direction:ltr;text-align:right}.links{display:flex;gap:26px;color:#c7cfdb;font-size:14px}.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 22px;border-radius:10px;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#15120b;font-weight:900;box-shadow:0 8px 30px #e9b84f25;transition:.2s}.btn:hover{transform:translateY(-2px);filter:brightness(1.08)}.btn.ghost{background:transparent;color:var(--gold2);border:1px solid var(--line);box-shadow:none}
+.lang-toggle{padding:10px 14px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.nav-actions{display:flex;gap:10px;align-items:center}
+html[dir="ltr"] .step{border-right:none;border-left:2px solid var(--gold)}
+html[dir="ltr"] .brand small{text-align:left}
+html[dir="ltr"] body{line-height:1.7}
 .hero{padding:76px 0 58px;display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}.eyebrow{color:var(--gold);font-size:13px;font-weight:bold;letter-spacing:.4px}.hero h1{font-size:clamp(38px,5.2vw,66px);line-height:1.2;margin:15px 0 18px;font-weight:900}.hero h1 span{color:var(--gold2)}.lead{font-size:18px;color:#c4ccda;max-width:620px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin:28px 0}.micro{font-size:12px;color:#8491a4}.hero-art{position:relative;display:flex;justify-content:center}.hero-art img{width:min(100%,480px);aspect-ratio:1;object-fit:cover;border-radius:28px;filter:drop-shadow(0 20px 55px #0009);mask-image:radial-gradient(ellipse,black 68%,transparent 100%)}.glow{position:absolute;width:70%;height:70%;background:#e8b54b20;filter:blur(75px);z-index:-1}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:8px 0 72px}.stat{background:linear-gradient(145deg,#151f2d,#0e141e);border:1px solid var(--line);border-radius:15px;padding:20px;text-align:center}.stat b{display:block;font-size:30px;color:var(--gold2);line-height:1.3}.stat span{font-size:13px;color:var(--muted)}
 section{padding:54px 0}.section-head{text-align:center;max-width:700px;margin:0 auto 32px}.section-head h2{font-size:clamp(27px,3.5vw,42px);margin:8px 0}.section-head p{color:var(--muted);margin:0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{background:linear-gradient(145deg,#141e2c,#0d131d);border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:24px}.icon{width:46px;height:46px;display:grid;place-items:center;border-radius:13px;background:#e9b84f18;color:var(--gold2);font-size:22px;border:1px solid var(--line)}.card h3{margin:14px 0 6px;font-size:19px}.card p{margin:0;color:var(--muted);font-size:14px}
@@ -25,38 +30,38 @@ footer{border-top:1px solid #ffffff12;padding:28px 0 35px;color:#929eaf;font-siz
 <body>
 <header class="wrap nav">
  <a class="brand" href="#"><img src="assets/gold-council-logo.png" alt="شعار مجلس الذهب"><span>مجلس الذهب<small>GOLD COUNCIL</small></span></a>
- <nav class="links"><a href="#about">عن المجلس</a><a href="#method">آلية العمل</a><a href="#signal">نموذج التوصية</a><a href="#journal">سجل النتائج</a><a href="#faq">الأسئلة الشائعة</a></nav>
- <a class="btn ghost" href="#subscribe">طلب الاشتراك</a>
+ <nav class="links"><a href="#about" data-i18n="nav_about">عن المجلس</a><a href="#method" data-i18n="nav_method">آلية العمل</a><a href="#signal" data-i18n="nav_signal">نموذج التوصية</a><a href="#journal" data-i18n="nav_journal">سجل النتائج</a><a href="#faq" data-i18n="nav_faq">الأسئلة الشائعة</a></nav>
+ <div class="nav-actions"><button id="lang-toggle" class="btn ghost lang-toggle" type="button" aria-label="Change language / تغيير اللغة">🌐 English</button><a class="btn ghost" href="#subscribe" data-i18n="nav_subscribe">طلب الاشتراك</a></div>
 </header>
 <main>
 <section class="wrap hero" id="about">
  <div>
   <div class="eyebrow">GOLD COUNCIL · MARKET INTELLIGENCE</div>
-  <h1>مش رأي محلل…<br><span>دي رؤية مجلس كامل.</span></h1>
-  <p class="lead">توصيات فوركس وذهب <b dir="ltr">XAUUSD</b> مبنية على تحليل جماعي من 35 محلل، بهدف تقديم رؤية أوضح للسوق وخطة تداول محددة قبل اتخاذ القرار.</p>
-  <div class="actions"><a class="btn" href="#subscribe">اطلب الاشتراك الآن ↗</a><a class="btn ghost" href="#method">اكتشف آلية العمل</a></div>
-  <div class="micro">بحد أقصى 3 توصيات يومياً · سجل نتائج واضح · إدارة مخاطر</div>
+  <h1 data-i18n-html="hero_title">مش رأي محلل…<br><span>دي رؤية مجلس كامل.</span></h1>
+  <p class="lead" data-i18n-html="hero_lead">توصيات فوركس وذهب <b dir="ltr">XAUUSD</b> مبنية على تحليل جماعي من 35 محلل، بهدف تقديم رؤية أوضح للسوق وخطة تداول محددة قبل اتخاذ القرار.</p>
+  <div class="actions"><a class="btn" href="#subscribe" data-i18n="hero_cta1">اطلب الاشتراك الآن ↗</a><a class="btn ghost" href="#method" data-i18n="hero_cta2">اكتشف آلية العمل</a></div>
+  <div class="micro" data-i18n="hero_micro">بحد أقصى 3 توصيات يومياً · سجل نتائج واضح · إدارة مخاطر</div>
  </div>
  <div class="hero-art"><div class="glow"></div><img src="assets/gold-council-logo.png" alt="Gold Council emblem"></div>
 </section>
 <div class="wrap stats">
- <div class="stat"><b>35</b><span>محلل ضمن الرؤية الجماعية</span></div>
- <div class="stat"><b>3</b><span>توصيات كحد أقصى يومياً</span></div>
- <div class="stat"><b>100%</b><span>وضوح تفاصيل كل توصية</span></div>
+ <div class="stat"><b>35</b><span data-i18n="stat_analysts">محلل ضمن الرؤية الجماعية</span></div>
+ <div class="stat"><b>3</b><span data-i18n="stat_daily">توصيات كحد أقصى يومياً</span></div>
+ <div class="stat"><b>100%</b><span data-i18n="stat_clear">وضوح تفاصيل كل توصية</span></div>
 </div>
 <section class="wrap" id="method">
- <div class="section-head"><div class="eyebrow">WHY GOLD COUNCIL</div><h2>تحليل منظم… وتوصية واضحة</h2><p>نركز على جودة الفرص ووضوح الخطة، لا على كثرة الإشارات.</p></div>
+ <div class="section-head"><div class="eyebrow">WHY GOLD COUNCIL</div><h2 data-i18n="method_h2">تحليل منظم… وتوصية واضحة</h2><p data-i18n="method_p">نركز على جودة الفرص ووضوح الخطة، لا على كثرة الإشارات.</p></div>
  <div class="grid">
-  <article class="card"><div class="icon">◎</div><h3>تحليل جماعي</h3><p>قراءة متعددة للسوق تجمع وجهات نظر المحللين قبل طرح التوصية.</p></article>
-  <article class="card"><div class="icon">⌁</div><h3>خطة تداول متكاملة</h3><p>دخول ووقف خسارة وأهداف، مع شرح الفكرة وصورة الشارت.</p></article>
-  <article class="card"><div class="icon">◷</div><h3>انتقائية في الفرص</h3><p>بحد أقصى ثلاث توصيات يومياً لتجنب إغراق المشترك بالإشارات.</p></article>
-  <article class="card"><div class="icon">▤</div><h3>سجل نتائج مفتوح</h3><p>عرض الصفقات الرابحة والخاسرة بوضوح، دون إخفاء النتائج السلبية.</p></article>
-  <article class="card"><div class="icon">◆</div><h3>إدارة للمخاطر</h3><p>مستويات وقف خسارة وأهداف محددة، مع ضرورة الالتزام بحجم مخاطرة مناسب.</p></article>
-  <article class="card"><div class="icon">♧</div><h3>اشتراك بإشراف الأدمن</h3><p>تفعيل يدوي للاشتراك من خلال مسؤول القناة بعد مراجعة الطلب.</p></article>
+  <article class="card"><div class="icon">◎</div><h3 data-i18n="card1_t">تحليل جماعي</h3><p data-i18n="card1_p">قراءة متعددة للسوق تجمع وجهات نظر المحللين قبل طرح التوصية.</p></article>
+  <article class="card"><div class="icon">⌁</div><h3 data-i18n="card2_t">خطة تداول متكاملة</h3><p data-i18n="card2_p">دخول ووقف خسارة وأهداف، مع شرح الفكرة وصورة الشارت.</p></article>
+  <article class="card"><div class="icon">◷</div><h3 data-i18n="card3_t">انتقائية في الفرص</h3><p data-i18n="card3_p">بحد أقصى ثلاث توصيات يومياً لتجنب إغراق المشترك بالإشارات.</p></article>
+  <article class="card"><div class="icon">▤</div><h3 data-i18n="card4_t">سجل نتائج مفتوح</h3><p data-i18n="card4_p">عرض الصفقات الرابحة والخاسرة بوضوح، دون إخفاء النتائج السلبية.</p></article>
+  <article class="card"><div class="icon">◆</div><h3 data-i18n="card5_t">إدارة للمخاطر</h3><p data-i18n="card5_p">مستويات وقف خسارة وأهداف محددة، مع ضرورة الالتزام بحجم مخاطرة مناسب.</p></article>
+  <article class="card"><div class="icon">♧</div><h3 data-i18n="card6_t">اشتراك بإشراف الأدمن</h3><p data-i18n="card6_p">تفعيل يدوي للاشتراك من خلال مسؤول القناة بعد مراجعة الطلب.</p></article>
  </div>
 </section>
 <section class="wrap" id="signal">
- <div class="section-head"><div class="eyebrow">TRADE PLAN</div><h2>كل توصية… بكل تفاصيلها</h2><p>مثال توضيحي لشكل بطاقة التوصية، وليس إشارة تداول حالية.</p></div>
+ <div class="section-head"><div class="eyebrow">TRADE PLAN</div><h2 data-i18n="signal_h2">كل توصية… بكل تفاصيلها</h2><p data-i18n="signal_p">مثال توضيحي لشكل بطاقة التوصية، وليس إشارة تداول حالية.</p></div>
  <div class="signal">
   <div class="chart">
    <div class="chart-head"><strong>XAUUSD</strong><span>CHART PREVIEW · DEMO</span></div>
@@ -67,43 +72,44 @@ footer{border-top:1px solid #ffffff12;padding:28px 0 35px;color:#929eaf;font-siz
     <path d="M0 170 L35 155 70 165 105 120 140 132 175 100 210 115 245 82 280 97 315 65 350 88 385 50 420 70 455 42 490 56 525 22 560 35 600 10" fill="none" stroke="#f3c866" stroke-width="3"/>
     <path d="M0 190H600" stroke="#e16c6c" stroke-dasharray="7 6"/><path d="M0 145H600" stroke="#43a9ff" stroke-dasharray="7 6"/>
    </svg>
-   <div class="micro">رسم واجهة تجريبي — لا يعرض بيانات سوق مباشرة.</div>
+   <div class="micro" data-i18n="chart_note">رسم واجهة تجريبي — لا يعرض بيانات سوق مباشرة.</div>
   </div>
   <div class="signal-list">
-   <div class="signal-row"><span>الأداة</span><b>XAUUSD · GOLD</b></div>
-   <div class="signal-row"><span>اتجاه الصفقة</span><b>BUY / SELL</b></div>
-   <div class="signal-row"><span>نقطة الدخول</span><b>Entry Zone</b></div>
-   <div class="signal-row"><span>وقف الخسارة</span><b>Stop Loss</b></div>
-   <div class="signal-row"><span>الأهداف</span><b>TP1 · TP2 · TP3</b></div>
-   <div class="signal-row"><span>شرح وتحليل</span><b>Chart + Analysis</b></div>
+   <div class="signal-row"><span data-i18n="row_tool">الأداة</span><b>XAUUSD · GOLD</b></div>
+   <div class="signal-row"><span data-i18n="row_dir">اتجاه الصفقة</span><b>BUY / SELL</b></div>
+   <div class="signal-row"><span data-i18n="row_entry">نقطة الدخول</span><b>Entry Zone</b></div>
+   <div class="signal-row"><span data-i18n="row_sl">وقف الخسارة</span><b>Stop Loss</b></div>
+   <div class="signal-row"><span data-i18n="row_tp">الأهداف</span><b>TP1 · TP2 · TP3</b></div>
+   <div class="signal-row"><span data-i18n="row_analysis">شرح وتحليل</span><b>Chart + Analysis</b></div>
   </div>
  </div>
 </section>
 <section class="wrap">
- <div class="section-head"><div class="eyebrow">HOW TO JOIN</div><h2>ابدأ في 3 خطوات</h2><p>رحلة اشتراك واضحة وبسيطة.</p></div>
+ <div class="section-head"><div class="eyebrow">HOW TO JOIN</div><h2 data-i18n="steps_h2">ابدأ في 3 خطوات</h2><p data-i18n="steps_p">رحلة اشتراك واضحة وبسيطة.</p></div>
  <div class="steps">
-  <div class="step"><b>01 / REQUEST</b><h3>أرسل طلبك</h3><p>تواصل مع الأدمن للاستفسار عن تفاصيل الاشتراك.</p></div>
-  <div class="step"><b>02 / REVIEW</b><h3>تأكيد الاشتراك</h3><p>يتم مراجعة الطلب وتأكيد طريقة الاشتراك يدوياً.</p></div>
-  <div class="step"><b>03 / ACCESS</b><h3>تفعيل الوصول</h3><p>بعد التأكيد، يرسل لك الأدمن تعليمات الانضمام.</p></div>
+  <div class="step"><b>01 / REQUEST</b><h3 data-i18n="step1_t">أرسل طلبك</h3><p data-i18n="step1_p">تواصل مع الأدمن للاستفسار عن تفاصيل الاشتراك.</p></div>
+  <div class="step"><b>02 / REVIEW</b><h3 data-i18n="step2_t">تأكيد الاشتراك</h3><p data-i18n="step2_p">يتم مراجعة الطلب وتأكيد طريقة الاشتراك يدوياً.</p></div>
+  <div class="step"><b>03 / ACCESS</b><h3 data-i18n="step3_t">تفعيل الوصول</h3><p data-i18n="step3_p">بعد التأكيد، يرسل لك الأدمن تعليمات الانضمام.</p></div>
  </div>
- <div class="cta" id="subscribe"><div class="eyebrow">JOIN GOLD COUNCIL</div><h2>جاهز تتابع السوق برؤية أوضح؟</h2><p>تواصل مع الأدمن لمعرفة تفاصيل الاشتراك والتفعيل.</p><a class="btn" href="https://t.me/Dr_Robot_Eg" target="_blank" rel="noopener">تواصل مع محمد ↗</a></div>
+ <div class="cta" id="subscribe"><div class="eyebrow">JOIN GOLD COUNCIL</div><h2 data-i18n="cta_h2">جاهز تتابع السوق برؤية أوضح؟</h2><p data-i18n="cta_p">تواصل مع الأدمن لمعرفة تفاصيل الاشتراك والتفعيل.</p><a class="btn" href="https://t.me/Dr_Robot_Eg" target="_blank" rel="noopener" data-i18n="cta_btn">تواصل مع محمد ↗</a></div>
 </section>
 <!-- JOURNAL — live from Supabase (assets/landing.js renders this section) -->
 <section class="wrap" id="journal">
  <div class="section-head"><div class="eyebrow">RESULTS JOURNAL</div>
- <h2>سجل النتائج الحقيقي</h2>
- <p>كل صفقة مغلقة تُسجَّل هنا بنتيجتها الفعلية — رابحة أو خاسرة — دون إخفاء. الاستراتيجية بلا حافة مثبتة بعد — السجل معلن: الرابحة والخاسرة معًا.</p></div>
- <div class="stats" id="journal-stats" style="margin-bottom:22px"><div class="stat"><b>…</b><span>جارٍ تحميل السجل</span></div></div>
- <div id="journal-body"><p class="empty">جارٍ تحميل سجل النتائج من قاعدة بيانات مجلس الذهب…</p></div>
+ <h2 data-i18n="journal_h2">سجل النتائج الحقيقي</h2>
+ <p data-i18n="journal_p">كل صفقة مغلقة تُسجَّل هنا بنتيجتها الفعلية — رابحة أو خاسرة — دون إخفاء. الاستراتيجية بلا حافة مثبتة بعد — السجل معلن: الرابحة والخاسرة معًا.</p></div>
+ <div class="stats" id="journal-stats" style="margin-bottom:22px"><div class="stat"><b>…</b><span data-i18n="j_loading_stat">جارٍ تحميل السجل</span></div></div>
+ <div id="journal-body"><p class="empty" data-i18n="j_loading_body">جارٍ تحميل سجل النتائج من قاعدة بيانات مجلس الذهب…</p></div>
  <p class="micro" style="text-align:center;margin-top:22px" id="journal-updated"></p>
 </section>
 <section class="wrap" id="faq">
- <div class="section-head"><div class="eyebrow">FAQ</div><h2>أسئلة شائعة</h2></div>
- <div class="faq" id="faq-list"><p class="empty">جارٍ تحميل الأسئلة الشائعة…</p></div>
- <div class="risk">⚠️ <b>تنبيه مخاطر:</b> المحتوى لأغراض المعلومات والتحليل فقط، ولا يمثل ضماناً للربح أو توصية استثمارية شخصية. التداول ينطوي على مخاطر مرتفعة؛ لا تخاطر بأموال لا تتحمل خسارتها، وتأكد من فهمك للمخاطر قبل اتخاذ أي قرار.</div>
+ <div class="section-head"><div class="eyebrow">FAQ</div><h2 data-i18n="faq_h2">أسئلة شائعة</h2></div>
+ <div class="faq" id="faq-list"><p class="empty" data-i18n="faq_loading">جارٍ تحميل الأسئلة الشائعة…</p></div>
+ <div class="risk" data-i18n-html="risk">⚠️ <b>تنبيه مخاطر:</b> المحتوى لأغراض المعلومات والتحليل فقط، ولا يمثل ضماناً للربح أو توصية استثمارية شخصية. التداول ينطوي على مخاطر مرتفعة؛ لا تخاطر بأموال لا تتحمل خسارتها، وتأكد من فهمك للمخاطر قبل اتخاذ أي قرار.</div>
 </section>
 </main>
-<footer><div class="wrap foot"><div><b style="color:var(--gold2)">مجلس الذهب | GOLD COUNCIL</b><br>35 محلل · رؤية واحدة للسوق</div><div>© 2026 Gold Council. جميع الحقوق محفوظة.</div></div></footer>
+<footer><div class="wrap foot"><div><b style="color:var(--gold2)">مجلس الذهب | GOLD COUNCIL</b><br><span data-i18n="foot_line">35 محلل · رؤية واحدة للسوق</span></div><div data-i18n="foot_rights">© 2026 Gold Council. جميع الحقوق محفوظة.</div></div></footer>
 <script src="assets/supabase.js"></script>
+<script src="assets/i18n.js"></script>
 <script src="assets/landing.js"></script>
 </body></html>

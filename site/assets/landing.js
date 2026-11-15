@@ -21,6 +21,14 @@
   var bodyBox = document.getElementById("journal-body");
   var updatedEl = document.getElementById("journal-updated");
   var faqBox = document.getElementById("faq-list");
+  var T = function (k) { return GC_I18N.t(k); };
+
+  /* Cached live data, so a language switch re-renders without refetching. */
+  var lastSignals = null, lastSettlements = null, lastFaq = null;
+  document.addEventListener("gc:lang", function () {
+    if (lastSignals) renderJournal(lastSignals, lastSettlements || []);
+    if (lastFaq) renderFaq(lastFaq);
+  });
 
   function statCard(value, label) {
     var d = el("div", "stat");
@@ -30,16 +38,18 @@
   }
 
   function renderJournal(signals, settlements) {
+    lastSignals = signals;
+    lastSettlements = settlements || [];
     var st = GC.distinctStats(signals);
     statsBox.textContent = "";
-    statsBox.appendChild(statCard(st.closed, "صفقات مغلقة (مميزة)"));
-    statsBox.appendChild(statCard(st.wins, "رابحة"));
-    statsBox.appendChild(statCard(st.losses, "خاسرة"));
+    statsBox.appendChild(statCard(st.closed, T("j_closed")));
+    statsBox.appendChild(statCard(st.wins, T("j_wins")));
+    statsBox.appendChild(statCard(st.losses, T("j_losses")));
     var line = el("p", "micro");
     line.style.textAlign = "center";
     line.style.margin = "-8px 0 22px";
-    line.innerHTML = "نسبة الفوز: <b style=\"color:var(--gold2)\">" +
-      (st.closed ? st.win_rate + "%" : "—") + "</b> · متوسط العائد: <b style=\"color:var(--gold2)\">" +
+    line.innerHTML = T("j_winrate") + " <b style=\"color:var(--gold2)\">" +
+      (st.closed ? st.win_rate + "%" : "—") + "</b> · " + T("j_avgr") + " <b style=\"color:var(--gold2)\">" +
       (st.closed ? fmtR(st.avg_r) : "—") + "</b>";
     statsBox.parentNode.insertBefore(line, statsBox.nextSibling);
 
@@ -56,8 +66,8 @@
       card.style.textAlign = "center";
       card.style.maxWidth = "640px";
       card.style.margin = "auto";
-      card.appendChild(el("h3", null, "لا توجد صفقات مغلقة بعد"));
-      var p = el("p", null, "المجلس في مرحلة التداول الورقي — كل توصية تُسجَّل هنا بنتيجتها الفعلية، رابحة أو خاسرة، فور إغلاقها. لا نتائج معروضة قبل وقوعها.");
+      card.appendChild(el("h3", null, T("j_empty_h")));
+      var p = el("p", null, T("j_empty_p"));
       card.appendChild(p);
       bodyBox.appendChild(card);
     } else {
@@ -70,8 +80,8 @@
       var thead = document.createElement("thead");
       var hr = document.createElement("tr");
       hr.style.color = "var(--muted)";
-      hr.style.textAlign = "right";
-      ["التاريخ", "الأداة", "الاتجاه", "الدخول", "النتيجة", "العائد"].forEach(function (h) {
+      hr.style.textAlign = GC_I18N.lang === "en" ? "left" : "right";
+      [T("th_date"), T("th_tool"), T("th_dir"), T("th_entry"), T("th_result"), T("th_pnl")].forEach(function (h) {
         var th = document.createElement("th");
         th.style.padding = "10px";
         th.textContent = h;
@@ -85,9 +95,9 @@
         var cells = [
           (s.created_at || "").slice(0, 10),
           s.symbol,
-          GC.DIR_AR[s.direction] || s.direction,
+          GC_I18N.dirLabel(s.direction),
           String(s.entry),
-          GC.RESULT_AR[s.status] || s.status,
+          GC_I18N.resultLabel(s.status),
           fmtR(s.pnl_r)
         ];
         cells.forEach(function (c, i) {
@@ -104,24 +114,26 @@
       bodyBox.appendChild(wrap);
     }
     if (updatedEl) {
-      updatedEl.textContent = "مرحلة ورقية (Paper) — لا أموال حقيقية. آخر تحديث: " +
-        new Date().toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) +
-        " بتوقيت القاهرة — البيانات من قاعدة بيانات مجلس الذهب (Supabase).";
+      var locale = GC_I18N.lang === "en" ? "en-GB" : "ar-EG";
+      updatedEl.textContent = T("j_updated").replace("{date}",
+        new Date().toLocaleString(locale, { timeZone: "Africa/Cairo" }));
     }
   }
 
   function renderFaq(items) {
+    lastFaq = items;
     faqBox.textContent = "";
     if (!items || items.length === 0) {
-      faqBox.appendChild(el("p", "empty", "لا توجد أسئلة شائعة بعد."));
+      faqBox.appendChild(el("p", "empty", T("faq_empty")));
       return;
     }
     items.forEach(function (item) {
+      var pair = GC_I18N.faqPair(item.question, item.answer);
       var d = document.createElement("details");
       var s = document.createElement("summary");
-      s.textContent = item.question;
+      s.textContent = pair[0];
       var p = document.createElement("p");
-      p.textContent = item.answer;
+      p.textContent = pair[1];
       d.appendChild(s);
       d.appendChild(p);
       faqBox.appendChild(d);
@@ -133,13 +145,13 @@
     .catch(function () {
       statsBox.textContent = "";
       bodyBox.textContent = "";
-      bodyBox.appendChild(el("p", "empty", "تعذّر تحميل سجل النتائج — تحقق من اتصالك وأعد تحميل الصفحة."));
+      bodyBox.appendChild(el("p", "empty", T("j_err")));
     });
 
   GC.activeFaq()
     .then(renderFaq)
     .catch(function () {
       faqBox.textContent = "";
-      faqBox.appendChild(el("p", "empty", "تعذّر تحميل الأسئلة الشائعة — أعد تحميل الصفحة لاحقًا."));
+      faqBox.appendChild(el("p", "empty", T("faq_err")));
     });
 })();
