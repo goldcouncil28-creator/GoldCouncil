@@ -25,6 +25,7 @@
 
   /* Cached live data, so a language switch re-renders without refetching. */
   var lastSignals = null, lastSettlements = null, lastFaq = null;
+  var winRateLine = null; /* one persistent line under the journal stats */
   document.addEventListener("gc:lang", function () {
     if (lastSignals) renderJournal(lastSignals, lastSettlements || []);
     if (lastFaq) renderFaq(lastFaq);
@@ -45,13 +46,15 @@
     statsBox.appendChild(statCard(st.closed, T("j_closed")));
     statsBox.appendChild(statCard(st.wins, T("j_wins")));
     statsBox.appendChild(statCard(st.losses, T("j_losses")));
-    var line = el("p", "micro");
-    line.style.textAlign = "center";
-    line.style.margin = "-8px 0 22px";
-    line.innerHTML = T("j_winrate") + " <b style=\"color:var(--gold2)\">" +
+    if (!winRateLine) {
+      winRateLine = el("p", "micro");
+      winRateLine.style.textAlign = "center";
+      winRateLine.style.margin = "-8px 0 22px";
+      statsBox.parentNode.insertBefore(winRateLine, statsBox.nextSibling);
+    }
+    winRateLine.innerHTML = T("j_winrate") + " <b style=\"color:var(--gold2)\">" +
       (st.closed ? st.win_rate + "%" : "—") + "</b> · " + T("j_avgr") + " <b style=\"color:var(--gold2)\">" +
       (st.closed ? fmtR(st.avg_r) : "—") + "</b>";
-    statsBox.parentNode.insertBefore(line, statsBox.nextSibling);
 
     bodyBox.textContent = "";
     var seen = {}, rows = [];
