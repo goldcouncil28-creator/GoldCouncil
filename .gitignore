@@ -1,0 +1,15 @@
+# Runtime files — never commit these (the VPS creates them on first run)
+system/data/
+system/telegram_bot/.bot-token
+system/telegram_bot/subs.db
+system/telegram_bot/.offset
+system/telegram_bot/charts/
+system/dashboard/.admin-password
+system/dashboard/server.log
+system/dashboard/.totp-secret
+*.db
+*.parquet
+__pycache__/
+*.pyc
+venv/
+.env

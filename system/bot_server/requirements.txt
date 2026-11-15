@@ -1,0 +1,12 @@
+# Gold Council bot-server — direct dependencies.
+# The pipeline itself (agents, Dukascopy, charts) needs the full system
+# stack; on a fresh VPS install these into the project venv together
+# with the rest of the system code (see README).
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.0
+pandas>=2.0
+numpy>=1.26
+dukascopy-python>=4.0
+matplotlib>=3.8
+requests>=2.32

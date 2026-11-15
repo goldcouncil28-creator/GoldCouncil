@@ -37,6 +37,7 @@ service-only. The publishable key in `site/assets/supabase.js` is a
 ```
 site/            # the website (landing + WebApp) — Cloudflare Pages output dir
 design/          # design docs: architecture, migration plan, schema, workflows
+system/          # the Python bot: 35 agents, pipeline, Telegram bot, dashboard, bot-server API
 supabase/
   migrations/    # 0002 public-read policies (applied 2026-11-15)
 wrangler.toml    # Cloudflare Pages config
