@@ -17,10 +17,17 @@ VALIDITY_HOURS = 8
 CACHE_PARQUET = Path(__file__).parent.parent / "data" / "xauusd_h1.parquet"
 
 
-def _latest_bars():
+def _latest_bars(start):
+    """H1 bars from `start` to now. Live Dukascopy first; on failure the
+    local parquet cache, filtered to the SAME window — never a shorter one.
+
+    A shorter window would mis-settle old signals: bars starting after a
+    signal's entry can only see levels already passed (e.g. an old short
+    looks like an instant TP2 hit because its stop-hit happened before the
+    window). _settle_one refuses to judge any signal the bars don't cover.
+    """
     from dukascopy_python import fetch, INTERVAL_HOUR_1, OFFER_SIDE_BID
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=3)
     try:
         df = fetch("xauusd", INTERVAL_HOUR_1, OFFER_SIDE_BID, start, end)
     except Exception:
@@ -41,12 +48,21 @@ def _latest_bars():
 
 
 def settle(api, cfg):
-    bars = _latest_bars()
+    store = backend.get_backend()
+    opens = store.list_open_signals()
+    if not opens:
+        return 0
+    # Fetch from the OLDEST open signal — never a fixed 3-day window.
+    oldest = min(_parse_ts(r["ts"]) for r in opens)
+    start = oldest
+    cap = datetime.now(timezone.utc) - timedelta(days=180)
+    if start < cap:
+        start = cap
+    bars = _latest_bars(start)
     if bars is None or len(bars) == 0:
         return 0
-    store = backend.get_backend()
     closed = 0
-    for r in store.list_open_signals():
+    for r in opens:
         try:
             closed += _settle_one(api, cfg, store, bars, r)
         except Exception as e:
@@ -54,11 +70,20 @@ def settle(api, cfg):
     return closed
 
 
+def _parse_ts(ts):
+    d = datetime.fromisoformat(ts)
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
 def _settle_one(api, cfg, store, bars, r):
     direction = 1 if r["direction"] in ("شراء", "long") else -1
-    ts = datetime.fromisoformat(r["ts"])
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+    ts = _parse_ts(r["ts"])
+    # Coverage guard: if the earliest bar is more than 2h after the entry,
+    # the bars don't reach back to the signal — judging would be a guess
+    # (an old short would look like an instant TP2 hit). Leave it open.
+    if len(bars) and (bars.index[0].to_pydatetime() - ts) > timedelta(hours=2):
+        print(f"settle: signal #{r.get('id')} skipped — no bars back to its entry time")
+        return 0
     fut = bars[bars.index > ts]
     status, exit_price = None, None
     for _, b in fut.iterrows():

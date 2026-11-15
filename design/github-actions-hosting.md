@@ -110,6 +110,14 @@ Functions (Supabase side; SQLite side mirrors them):
 ### 4.3 Settle semantics (Narmer fix, not the VM copy)
 
 - **TP2 is checked before TP1** (the VM copy checks TP1 first and shadows TP2).
+- **Fetch window = from the OLDEST open signal, never a fixed 3 days.**
+  A truncated window mis-settles old signals: bars starting after a signal's
+  entry can only see levels already passed (an old short looks like an instant
+  TP2 hit because its stop-hit happened before the window). Found 2026-11-16
+  when a VM smoke run settled the 9 archived signals as TP2 +3.0R/+4.01R
+  against a 3-day cache — the true outcomes are SL/TP1 (Supabase is truth).
+  `_settle_one` now refuses any signal whose entry predates the earliest bar
+  by more than 2h (leaves it open, prints a skip line).
 - Time-only expiry after 8h: `status='expired'`, `exit_price=NULL`, `pnl_r=NULL`
   — the close price is **never invented**.
 - A close with `exit_price IS NULL` writes **no** `settlements` row
