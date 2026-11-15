@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!--
+  Gold Council — Telegram WebApp (live data from Supabase)
+  Data comes ONLY from the Supabase REST API (read-only, anon key) via
+  ../assets/supabase.js: published signals, distinct journal stats, and
+  the active FAQ. No live database access beyond that, no Telegram Bot API
+  calls from this page, no trading actions of any kind.
+  Pending/review signals are never shown. Profile and referral counts stay
+  at their honest empty state until a server-side lookup exists.
+-->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مجلس الذهب | Gold Council</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <img class="logo" src="gold-council-logo.png" alt="شعار مجلس الذهب" onerror="this.style.display='none'">
+  <h1>مجلس الذهب</h1>
+  <p class="subtitle">توصيات ذهب وفوركس موثقة — ورقية أولًا</p>
+  <p class="paper-notice" id="paper-notice">كل التوصيات حاليا ورقية (paper). لا نبيع توصيات مدفوعة قبل شهر ورقي موثق بسجل معلن.</p>
+  <p class="honest-results">الاستراتيجية بلا حافة مثبتة بعد (t-stat +0.75) — السجل معلن: الرابحة والخاسرة معا.</p>
+  <p class="telegram-note" id="telegram-note" hidden>أنت تفتح هذه الصفحة خارج تيليجرام — افتحها من داخل بوت @GoldCouncil_bot لعرض ملفك الشخصي ورابط دعوتك الخاص.</p>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="أقسام التطبيق">
+  <button class="tab active" role="tab" aria-selected="true" data-tab="signals">الإشارات</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="profile">الملف الشخصي</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="support">الدعم</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="assistant">المساعد</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="referral">الدعوات</button>
+</nav>
+
+<main>
+  <!-- الإشارات -->
+  <section class="panel active" id="panel-signals" role="tabpanel">
+    <h2>الإشارات المنشورة</h2>
+    <p class="meta" id="signals-meta">جارٍ تحميل البيانات…</p>
+    <div id="signals-list"></div>
+    <div class="stats" id="journal-stats"></div>
+    <p class="meta">حد أقصى 3 توصيات في اليوم، وليست حصة. يوم بلا فرص واضحة قد لا تصدر فيه أي توصية.</p>
+  </section>
+
+  <!-- الملف الشخصي -->
+  <section class="panel" id="panel-profile" role="tabpanel">
+    <h2>الملف الشخصي</h2>
+    <div id="profile-body">
+      <p class="empty">لا يوجد اشتراك مسجل بعد.</p>
+      <p>أنت في قائمة الانتظار. للاشتراك تواصل مع محمد مباشرة — الدفع يدوي ولا يوجد دفع داخل البوت.</p>
+    </div>
+    <div class="stats" id="profile-progress"></div>
+    <p><a class="btn" href="https://t.me/Dr_Robot_Eg" target="_blank" rel="noopener">تواصل مع محمد</a></p>
+  </section>
+
+  <!-- الدعم -->
+  <section class="panel" id="panel-support" role="tabpanel">
+    <h2>الدعم — أسئلة شائعة</h2>
+    <div id="faq-list"><p class="meta">جارٍ تحميل الأسئلة الشائعة…</p></div>
+    <p>رابط مجموعة النقاش يصلك مع رسالة الترحيب. لأي استفسار آخر:</p>
+    <p><a class="btn" href="https://t.me/Dr_Robot_Eg" target="_blank" rel="noopener">تواصل مع محمد</a></p>
+  </section>
+
+  <!-- المساعد -->
+  <section class="panel" id="panel-assistant" role="tabpanel">
+    <h2>المساعد</h2>
+    <p class="empty">المساعد يصل في المرحلة الثانية.</p>
+    <p>سيجيب فقط من التوصيات المنشورة وسجلك الشخصي والأسئلة الشائعة — ولن يتنبأ بالأسعار ولن يتداول نيابة عنك.</p>
+  </section>
+
+  <!-- الدعوات -->
+  <section class="panel" id="panel-referral" role="tabpanel">
+    <h2>الدعوات</h2>
+    <p>رابط دعوتك الشخصي:</p>
+    <p class="invite-link" id="invite-link">https://t.me/GoldCouncil_bot?start=ref_&lt;id&gt;</p>
+    <p class="meta" id="invite-note">رابط قالب — يُخصَّص برقمك بعد فتح التطبيق من داخل تيليجرام.</p>
+    <p><button class="btn" id="copy-invite" type="button">نسخ رابط الدعوة</button></p>
+    <p class="meta" id="copy-status" role="status"></p>
+    <div class="stats" id="referral-stats"></div>
+  </section>
+</main>
+
+<footer>
+  <p>مجلس الذهب — توصيات موثقة فقط. لا تداول آلي أبدًا، ولا اتصال بأي وسيط.</p>
+  <p class="meta" id="generated-at"></p>
+</footer>
+
+<script src="../assets/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

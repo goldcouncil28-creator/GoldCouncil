@@ -1,0 +1,153 @@
+/* Gold Council WebApp — dark theme, Arabic RTL. Matches the landing page style:
+   near-black background, gold accent, dark cards. No external fonts or assets. */
+:root {
+  --bg: #0d0f14;
+  --card: #171a21;
+  --card-border: #262b36;
+  --text: #e8e6df;
+  --muted: #9a978c;
+  --gold: #d4af37;
+  --gold-dim: #8a7326;
+  --red: #e5484d;
+  --green: #46a758;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  line-height: 1.7;
+  direction: rtl;
+}
+.app-header {
+  text-align: center;
+  padding: 20px 16px 8px;
+  border-bottom: 1px solid var(--card-border);
+}
+.logo { max-width: 220px; width: 70%; height: auto; border-radius: 12px; }
+h1 { color: var(--gold); margin: 10px 0 0; font-size: 1.6rem; }
+h2 { color: var(--gold); font-size: 1.2rem; margin-top: 0; }
+.subtitle { color: var(--muted); margin: 4px 0 12px; }
+.paper-notice {
+  background: #2a2113;
+  border: 1px solid var(--gold-dim);
+  color: #f0d98c;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px auto;
+  max-width: 560px;
+}
+.honest-results {
+  color: #f0b4b6;
+  border: 1px solid #5a2b2d;
+  background: #241416;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px auto;
+  max-width: 560px;
+}
+.telegram-note {
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px auto;
+  max-width: 560px;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 8px 0;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.tab {
+  flex: 1;
+  background: var(--card);
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 10px 2px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.tab.active { background: #1e232e; color: var(--gold); border-color: var(--gold-dim); }
+main { max-width: 640px; margin: 0 auto; padding: 0 8px 24px; }
+.panel {
+  display: none;
+  background: #1e232e;
+  border: 1px solid var(--card-border);
+  border-radius: 0 0 12px 12px;
+  padding: 16px;
+}
+.panel.active { display: block; }
+.empty {
+  background: var(--card);
+  border: 1px dashed var(--card-border);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+.meta { color: var(--muted); font-size: 0.9rem; }
+.signal-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.signal-card .direction-sell { color: var(--red); font-weight: bold; }
+.signal-card .direction-buy { color: var(--green); font-weight: bold; }
+.paper-tag {
+  display: inline-block;
+  background: #2a2113;
+  color: #f0d98c;
+  border: 1px solid var(--gold-dim);
+  border-radius: 6px;
+  padding: 1px 8px;
+  font-size: 0.8rem;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.stat {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+.stat .value { font-size: 1.3rem; font-weight: bold; color: var(--gold); }
+.stat .label { font-size: 0.8rem; color: var(--muted); }
+.faq-item { margin-bottom: 14px; }
+.faq-item h3 { margin: 0 0 4px; font-size: 1rem; color: var(--text); }
+.faq-item p { margin: 0; color: var(--muted); white-space: pre-line; }
+.btn {
+  display: inline-block;
+  background: var(--gold);
+  color: #141414;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.invite-link {
+  direction: ltr;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 10px;
+  word-break: break-all;
+  font-family: monospace;
+}
+footer { text-align: center; color: var(--muted); padding: 8px 16px 24px; font-size: 0.9rem; }

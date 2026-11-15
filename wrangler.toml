@@ -1,0 +1,8 @@
+# Cloudflare Pages — Gold Council website.
+# Deploy (once the Cloudflare API token is available):
+#   wrangler pages deploy site --project-name gold-council
+# The .dev custom domain is attached in the Cloudflare dashboard
+# (Pages project -> Custom domains) — no secret belongs in this file.
+name = "gold-council"
+pages_build_output_dir = "site"
+compatibility_date = "2026-11-15"
