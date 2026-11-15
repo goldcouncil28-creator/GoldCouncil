@@ -1,0 +1,10 @@
+# Gold Council — GitHub Actions runner dependencies.
+# Pinned to the exact versions proven on the VM venv (Python 3.12).
+# Keep in sync with ~/workspace/goals/goal/system/venv on the VM.
+pandas==3.0.6
+numpy==2.5.4
+matplotlib==3.11.2
+dukascopy-python==4.0.1
+psycopg[binary]==3.3.9
+pyarrow==26.0.0
+requests==2.34.2

@@ -40,6 +40,33 @@ def log_signal(card, votes: dict, mode: str = "paper") -> int:
     from datetime import datetime, timezone
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     with _conn() as c:
+        # Dedup guard (approved Narmer fix 2026-11-14, backported): the same
+        # setup (symbol, direction, entry, stop, tp1, tp2) with an open
+        # journal row OR a matching pending review row is NOT logged again.
+        # Runs BEFORE the cap check so a duplicate never consumes the cap.
+        # Returns -2, like the Supabase store.
+        dup = c.execute(
+            "SELECT id FROM signals WHERE symbol=? AND direction=? AND entry=? "
+            "AND stop=? AND tp1=? AND tp2=? AND status='open' LIMIT 1",
+            (card.symbol, card.direction, card.entry, card.stop,
+             card.tp1, card.tp2)).fetchone()
+        if not dup:
+            try:
+                subs_db = Path(__file__).parent / "telegram_bot" / "subs.db"
+                if subs_db.exists():
+                    c.execute(f"ATTACH DATABASE '{subs_db}' AS subs")
+                    dup = c.execute(
+                        "SELECT p.signal_id FROM subs.pending p "
+                        "JOIN signals s ON s.id = p.signal_id "
+                        "WHERE s.symbol=? AND s.direction=? AND s.entry=? "
+                        "AND s.stop=? AND s.tp1=? AND s.tp2=? "
+                        "AND p.status='pending' LIMIT 1",
+                        (card.symbol, card.direction, card.entry, card.stop,
+                         card.tp1, card.tp2)).fetchone()
+            except Exception:
+                dup = None  # missing file/table -> that half of the guard is skipped
+        if dup:
+            return -2
         n = c.execute("SELECT n FROM daily_count WHERE day=?", (day,)).fetchone()
         n = (n[0] if n else 0)
         if n >= 3:  # سقف التوصيات اليومي — لا تُخترع توصيات

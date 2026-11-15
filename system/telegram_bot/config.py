@@ -2,8 +2,13 @@
 
 كل السكربتات config-gated: لو التوكن أو القناة غير موجودين،
 تخرج بهدوء (exit 0) بلا إرسال — الكرونات آمنة قبل التفعيل.
+
+على GitHub Actions (GC_STORE=supabase): التوكن من env TELEGRAM_BOT_TOKEN،
+والوضع + عدد التوصيات المراجَعة من جدول bot_state في Supabase
+(الملف المحلي لا يعيش عبر دورات Actions).
 """
 import json
+import os
 from pathlib import Path
 
 DIR = Path(__file__).parent
@@ -34,7 +39,22 @@ class Config:
         else:
             data = {}
         merged = {**DEFAULTS, **data}
-        return cls(merged)
+        cfg = cls(merged)
+        # Supabase backend: mode + reviewed_count live in bot_state, not in
+        # the ephemeral checkout. Best-effort: on any failure keep file values.
+        try:
+            from . import backend as _backend
+            if _backend.use_supabase():
+                store = _backend.get_backend()
+                mode = store.get_bot_state("mode", None)
+                if mode in ("review", "auto"):
+                    cfg._data["mode"] = mode
+                rc = store.get_bot_state("reviewed_count", None)
+                if rc is not None:
+                    cfg._data["reviewed_count"] = int(rc)
+        except Exception:
+            pass
+        return cfg
 
     def save(self):
         CONFIG_FILE.write_text(json.dumps(self._data, ensure_ascii=False, indent=1),
@@ -45,10 +65,25 @@ class Config:
 
     def set(self, name, value):
         self._data[name] = value
+        try:
+            from . import backend as _backend
+            supa = _backend.use_supabase()
+        except Exception:
+            supa = False
+        if supa and name in ("mode", "reviewed_count"):
+            # Supabase backend: persist in bot_state, never in the ephemeral checkout.
+            try:
+                _backend.get_backend().set_bot_state(name, str(value))
+            except Exception as e:
+                print(f"config: bot_state write failed for {name}: {type(e).__name__}")
+            return
         self.save()
 
     @property
     def token(self) -> str | None:
+        env_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+        if env_token:
+            return env_token
         p = Path(self._data["token_file"])
         if p.exists():
             t = p.read_text(encoding="utf-8").strip()

@@ -1,0 +1,49 @@
+# Gold Council — poller (single getUpdates pass, every 5 min)
+# Design: design/github-actions-hosting.md §3, §6, §7
+# State lives in Supabase (GC_STORE=supabase); nothing persists on the runner.
+# Fail-closed: if secrets are missing the bot exits 0 ("not configured, skipping").
+
+name: poll
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (stub Telegram sends, no Supabase writes)'
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: gc-poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    name: poll
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GC_STORE: supabase
+      GC_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r system/requirements-actions.txt
+
+      - name: Run poller (single pass)
+        working-directory: system
+        run: python -m telegram_bot.poll

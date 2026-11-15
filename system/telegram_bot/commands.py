@@ -7,20 +7,19 @@
 أزرار: اعتماد/رفض (أدمن) + «دخلت الصفقة» (مشترك).
 حماية الأدمن: هوية Telegram ID + حد 20 إجراء/دقيقة + سجل تدقيق
   (admin_audit) لكل عملية إدارية ومحاولة غير مصرّح بها.
+التخزين عبر `backend` (SQLite محليًا، Supabase على Actions).
 """
-import sqlite3
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
-from . import cards, review, store
-
-JOURNAL_DB = Path(__file__).parent.parent / "data" / "journal.db"
+from . import backend, cards, review
 
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_ACTIONS = 20
 
 ADMIN_COMMANDS = {"/activate", "/deactivate", "/kick", "/list", "/pending",
                   "/approve", "/reject", "/mode", "/admin", "/audit"}
+
+DIR_AR = {"long": "شراء", "short": "بيع"}
 
 
 def _now():
@@ -31,38 +30,14 @@ def _is_admin(cfg, chat_id: int) -> bool:
     return chat_id in (cfg.admin_ids or [])
 
 
-def _attach(c):
-    # ATTACH لا يقبل بارامترات مربوطة — المسار من كودنا نفسه
-    c.execute(f"ATTACH DATABASE '{JOURNAL_DB}' AS j")
-    return c
-
-
 def _audit(admin_id, action, target="", detail="", ok=1):
     """سجل تدقيق: كل عملية إدارية ومحاولة غير مصرّح بها."""
-    try:
-        with store.conn() as c:
-            c.execute("INSERT INTO admin_audit(ts, admin_chat_id, action, target, detail, ok) "
-                      "VALUES(?,?,?,?,?,?)",
-                      (_now().isoformat(), admin_id, action, str(target), detail, int(ok)))
-    except Exception:
-        pass
+    backend.get_backend().audit(admin_id, action, target, detail, ok)
 
 
 def _rate_ok(admin_id: int) -> bool:
-    """حد 20 إجراء إداري/دقيقة لكل أدمن — محفوظ في SQLite فيبقى عبر دورات poll."""
-    try:
-        with store.conn() as c:
-            cutoff = (_now() - timedelta(seconds=RATE_WINDOW_SECONDS)).isoformat()
-            c.execute("DELETE FROM admin_rate WHERE ts < ?", (cutoff,))
-            n = c.execute("SELECT COUNT(*) FROM admin_rate WHERE admin_chat_id=?",
-                          (admin_id,)).fetchone()[0]
-            if n >= RATE_MAX_ACTIONS:
-                return False
-            c.execute("INSERT INTO admin_rate(admin_chat_id, ts) VALUES(?, ?)",
-                      (admin_id, _now().isoformat()))
-            return True
-    except Exception:
-        return True  # لو تعطل التقييد لا نقفل الأدمن
+    """حد 20 إجراء إداري/دقيقة لكل أدمن — محفوظ في التخزين فيبقى عبر دورات poll."""
+    return backend.get_backend().rate_check_and_record(admin_id)
 
 
 def handle_update(api, cfg, update: dict):
@@ -100,13 +75,13 @@ def handle_update(api, cfg, update: dict):
 
 
 def _handle_user(api, cfg, chat_id, cmd, args, username=None):
-    with store.conn() as c:
-        sub = c.execute("SELECT status, expires_at FROM subscribers WHERE chat_id=?",
-                        (chat_id,)).fetchone()
+    store = backend.get_backend()
+    sub = store.get_subscriber(chat_id)
     if cmd == "/start":
-        if sub and sub[0] == "active":
+        if sub and sub["status"] == "active":
+            exp = (sub.get("expires_at") or "")[:10] or "؟"
             api.send_message(chat_id,
-                             f"{cfg.welcome}\n\nاشتراكك نشط حتى {sub[1][:10]}.")
+                             f"{cfg.welcome}\n\nاشتراكك نشط حتى {exp}.")
         else:
             api.send_message(chat_id,
                              f"{cfg.welcome}\n\nللاشتراك تواصل مع محمد مباشرة، "
@@ -115,31 +90,21 @@ def _handle_user(api, cfg, chat_id, cmd, args, username=None):
         if not sub:
             api.send_message(chat_id, "ليس لديك سجل بعد — اشترك أولًا عبر محمد.")
             return
-        with store.conn() as c:
-            _attach(c)
-            rows = c.execute(
-                "SELECT j.status, COUNT(*) FROM subscriber_signals ss "
-                "JOIN j.signals j ON j.id = ss.signal_id "
-                "WHERE ss.subscriber_chat_id=? GROUP BY j.status",
-                (chat_id,)).fetchall()
-        wins = sum(n for s, n in rows if s in ("tp1", "tp2"))
-        losses = sum(n for s, n in rows if s == "sl")
+        rows = store.user_signal_stats(chat_id)
+        wins = sum(r["n"] for r in rows if r["status"] in ("tp1", "tp2"))
+        losses = sum(r["n"] for r in rows if r["status"] == "sl")
         total = wins + losses
         api.send_message(chat_id,
                          f"📊 سجلك الشخصي:\nصفقات مغلقة: {total}\n"
                          f"رابحة: {wins} | خاسرة: {losses}\n"
                          f"نسبة الفوز: {round(100*wins/total, 1) if total else 0}%")
     elif cmd == "/history":
-        with store.conn() as c:
-            _attach(c)
-            rows = c.execute(
-                "SELECT j.id, j.symbol, j.direction, j.status FROM deliveries d "
-                "JOIN j.signals j ON j.id = d.signal_id "
-                "ORDER BY d.published_at DESC LIMIT 10").fetchall()
+        rows = store.recent_published(10)
         if not rows:
             api.send_message(chat_id, "لا توصيات منشورة بعد.")
             return
-        lines = [f"#{i} {sym} {d} — {s}" for i, sym, d, s in rows]
+        lines = [f"#{r['id']} {r['symbol']} {DIR_AR.get(r['direction'], r['direction'])} — {r['status']}"
+                 for r in rows]
         api.send_message(chat_id, "🕘 آخر التوصيات:\n" + "\n".join(lines))
     elif cmd == "/help":
         api.send_message(chat_id,
@@ -151,18 +116,14 @@ def _handle_user(api, cfg, chat_id, cmd, args, username=None):
 
 def _admin_activate(api, cfg, uid, days, name=""):
     """تفعيل مشترك + رابط دعوة + رسالة له. يرجع نص النتيجة للأدمن."""
+    store = backend.get_backend()
     exp = (_now() + timedelta(days=days)).isoformat()
     link = None
     try:
         link = api.create_invite_link(cfg.channel_id, name=f"sub-{uid}")["invite_link"]
     except Exception:
         pass
-    with store.conn() as c:
-        c.execute("INSERT INTO subscribers(chat_id, name, status, activated_at, expires_at, invite_link, warned) "
-                  "VALUES(?,?, 'active', ?, ?, ?, 0) "
-                  "ON CONFLICT(chat_id) DO UPDATE SET status='active', expires_at=excluded.expires_at, "
-                  "invite_link=excluded.invite_link, warned=0",
-                  (uid, name, _now().isoformat(), exp, link))
+    store.upsert_subscriber(uid, name, exp, link)
     try:
         api.send_message(uid, f"{cfg.welcome}\n\nتم تفعيل اشتراكك حتى {exp[:10]}."
                          + (f"\nرابط القناة: {link}" if link else ""))
@@ -175,33 +136,31 @@ def _admin_activate(api, cfg, uid, days, name=""):
 
 def _admin_set_status(api, cfg, uid, status):
     """إيقاف/طرد: تحديث الحالة + حظر من القناة + إلغاء رابط الدعوة."""
-    with store.conn() as c:
-        row = c.execute("SELECT invite_link FROM subscribers WHERE chat_id=?",
-                        (uid,)).fetchone()
-        c.execute("UPDATE subscribers SET status=? WHERE chat_id=?", (status, uid))
+    store = backend.get_backend()
+    link = store.get_subscriber_invite(uid)
+    store.set_subscriber_status(uid, status)
     try:
         api.ban(cfg.channel_id, uid)
-        if row and row[0]:
-            api.revoke_invite_link(cfg.channel_id, row[0])
+        if link:
+            api.revoke_invite_link(cfg.channel_id, link)
     except Exception:
         pass
     return f"✅ {uid} → {status}"
 
 
 def _handle_admin(api, cfg, chat_id, cmd, args) -> bool:
+    store = backend.get_backend()
     if cmd == "/admin":
         api.send_message(chat_id, _panel_main_text(cfg),
                          reply_markup=cards.panel_main_keyboard())
         return True
     if cmd == "/audit":
-        with store.conn() as c:
-            rows = c.execute("SELECT ts, action, target, ok FROM admin_audit "
-                             "ORDER BY id DESC LIMIT 10").fetchall()
+        rows = store.recent_audit(10)
         if not rows:
             api.send_message(chat_id, "🧾 سجل العمليات:\nلا عمليات مسجلة بعد.")
         else:
-            lines = [f"{t[11:16]} {a} {tg} {'✅' if ok else '⛔'}"
-                     for t, a, tg, ok in rows]
+            lines = [f"{r['ts'][11:16]} {r['action']} {r['target']} {'✅' if r['ok'] else '⛔'}"
+                     for r in rows]
             api.send_message(chat_id, "🧾 آخر عمليات الأدمن:\n" + "\n".join(lines))
         return True
     if cmd == "/activate" and len(args) >= 2:
@@ -222,17 +181,14 @@ def _handle_admin(api, cfg, chat_id, cmd, args) -> bool:
         api.send_message(chat_id, _admin_set_status(api, cfg, uid, status))
         return True
     if cmd == "/list":
-        with store.conn() as c:
-            rows = c.execute("SELECT chat_id, name, status, expires_at FROM subscribers "
-                             "ORDER BY status, expires_at").fetchall()
-        lines = [f"{i} {n or ''} — {s} حتى {e[:10] if e else '?'}" for i, n, s, e in rows]
+        rows = store.list_subscribers()
+        lines = [f"{r['chat_id']} {r['name'] or ''} — {r['status']} حتى {(r['expires_at'] or '')[:10] or '?'}"
+                 for r in rows]
         api.send_message(chat_id, "👥 المشتركون:\n" + ("\n".join(lines) if lines else "لا أحد"))
         return True
     if cmd == "/pending":
-        with store.conn() as c:
-            rows = c.execute("SELECT signal_id, created_at FROM pending "
-                             "WHERE status='pending' ORDER BY created_at").fetchall()
-        lines = [f"#{i} منذ {t[11:16]}" for i, t in rows]
+        rows = store.list_pending()
+        lines = [f"#{r['signal_id']} منذ {r['created_at'][11:16]}" for r in rows]
         api.send_message(chat_id, "📥 بانتظار المراجعة:\n" + ("\n".join(lines) if lines else "لا شيء"))
         return True
     if cmd in ("/approve", "/reject") and args:
@@ -287,55 +243,42 @@ def _panel_view_main(api, cfg, cb):
 
 
 def _panel_view_subs(api, cfg, cb):
-    with store.conn() as c:
-        rows = c.execute("SELECT chat_id, name, status, expires_at FROM subscribers "
-                         "ORDER BY status, expires_at LIMIT 10").fetchall()
+    rows = backend.get_backend().list_subscribers(10)
     if not rows:
         _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb),
                     "👥 المشتركون:\nلا أحد بعد.", cards.panel_back_keyboard())
         return
-    lines = [f"{'🟢' if s == 'active' else '🔴'} {i} {n or ''} — {s} حتى {e[:10] if e else '?'}"
-             for i, n, s, e in rows]
+    lines = [f"{'🟢' if r['status'] == 'active' else '🔴'} {r['chat_id']} {r['name'] or ''} — {r['status']} حتى {(r['expires_at'] or '')[:10] or '?'}"
+             for r in rows]
     kb = {"inline_keyboard": [
-        [{"text": f"{n or i} ({s})", "callback_data": f"sub:{i}"}] for i, n, s, e in rows
+        [{"text": f"{r['name'] or r['chat_id']} ({r['status']})", "callback_data": f"sub:{r['chat_id']}"}] for r in rows
     ] + [[{"text": "⬅️ رجوع", "callback_data": "panel:main"}]]}
     _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb),
                 "👥 المشتركون (دوس على واحد للتحكم):\n" + "\n".join(lines), kb)
 
 
 def _panel_view_pending(api, cfg, cb):
-    with store.conn() as c:
-        rows = c.execute("SELECT signal_id, created_at FROM pending "
-                         "WHERE status='pending' ORDER BY created_at").fetchall()
+    rows = backend.get_backend().list_pending()
     if not rows:
         _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb),
                     "📥 بانتظار المراجعة:\nلا شيء.", cards.panel_back_keyboard())
         return
-    lines = [f"#{i} منذ {t[11:16]}" for i, t in rows]
+    lines = [f"#{r['signal_id']} منذ {r['created_at'][11:16]}" for r in rows]
     kb = {"inline_keyboard": [
-        [{"text": f"✅ #{i}", "callback_data": f"approve:{i}"},
-         {"text": f"❌ #{i}", "callback_data": f"reject:{i}"}] for i, _ in rows
+        [{"text": f"✅ #{r['signal_id']}", "callback_data": f"approve:{r['signal_id']}"},
+         {"text": f"❌ #{r['signal_id']}", "callback_data": f"reject:{r['signal_id']}"}] for r in rows
     ] + [[{"text": "⬅️ رجوع", "callback_data": "panel:main"}]]}
     _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb),
                 "📥 بانتظار المراجعة:\n" + "\n".join(lines), kb)
 
 
 def _panel_view_stats(api, cfg, cb):
-    with store.conn() as c:
-        subs = c.execute("SELECT status, COUNT(*) FROM subscribers GROUP BY status").fetchall()
-        pend = c.execute("SELECT COUNT(*) FROM pending WHERE status='pending'").fetchone()[0]
-        try:
-            _attach(c)
-            rows = c.execute("SELECT j.status, COUNT(*) FROM deliveries d "
-                             "JOIN j.signals j ON j.id = d.signal_id GROUP BY j.status").fetchall()
-        except Exception:
-            rows = []
-    wins = sum(n for s, n in rows if s in ("tp1", "tp2"))
-    losses = sum(n for s, n in rows if s == "sl")
-    total = wins + losses
+    st = backend.get_backend().panel_stats()
+    wins, losses, total = st["wins"], st["losses"], st["total"]
+    subs = st["subs"]
     sub_line = " | ".join(f"{s}: {n}" for s, n in subs) if subs else "لا مشتركين"
     text = (f"📊 الإحصائيات:\nالمشتركون: {sub_line}\n"
-            f"بانتظار المراجعة: {pend}\n"
+            f"بانتظار المراجعة: {st['pending']}\n"
             f"صفقات مغلقة: {total} (رابحة {wins} | خاسرة {losses})\n"
             f"الوضع: {cfg.mode} | مراجَعة: {cfg.reviewed_count or 0}/{cfg.auto_after_reviewed}")
     _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb), text, cards.panel_back_keyboard())
@@ -352,14 +295,12 @@ def _panel_view_mode(api, cfg, cb):
 
 
 def _panel_view_audit(api, cfg, cb):
-    with store.conn() as c:
-        rows = c.execute("SELECT ts, action, target, ok FROM admin_audit "
-                         "ORDER BY id DESC LIMIT 10").fetchall()
+    rows = backend.get_backend().recent_audit(10)
     if not rows:
         text = "🧾 سجل العمليات:\nلا عمليات مسجلة بعد."
     else:
-        lines = [f"{t[11:16]} {a} {tg[:30]} {'✅' if ok else '⛔'}"
-                 for t, a, tg, ok in rows]
+        lines = [f"{r['ts'][11:16]} {r['action']} {r['target'][:30]} {'✅' if r['ok'] else '⛔'}"
+                 for r in rows]
         text = "🧾 آخر عمليات الأدمن:\n" + "\n".join(lines)
     _panel_show(api, cfg, _cb_chat(cb), _cb_mid(cb), text, cards.panel_back_keyboard())
 
@@ -395,17 +336,15 @@ def _handle_sub_detail(api, cfg, cb, sid_str, answer=True):
         if answer:
             api.answer_callback(cb["id"], "؟")
         return
-    with store.conn() as c:
-        row = c.execute("SELECT chat_id, username, name, status, activated_at, expires_at, invite_link "
-                        "FROM subscribers WHERE chat_id=?", (uid,)).fetchone()
+    row = backend.get_backend().get_subscriber(uid)
     if not row:
         if answer:
             api.answer_callback(cb["id"], "غير موجود")
         return
-    cid, username, name, status, act, exp, link = row
-    text = (f"👤 {name or username or cid}\nID: {cid}\nالحالة: {status}\n"
-            f"مفعّل: {act[:10] if act else '؟'} | ينتهي: {exp[:10] if exp else '؟'}\n"
-            f"الرابط: {link or '—'}")
+    cid = row["chat_id"]
+    text = (f"👤 {row['name'] or row['username'] or cid}\nID: {cid}\nالحالة: {row['status']}\n"
+            f"مفعّل: {(row['activated_at'] or '')[:10] or '؟'} | ينتهي: {(row['expires_at'] or '')[:10] or '؟'}\n"
+            f"الرابط: {row['invite_link'] or '—'}")
     kb = {"inline_keyboard": [
         [{"text": "✅ تفعيل 30 يوم", "callback_data": f"subact:act30:{cid}"}],
         [{"text": "⏸️ إيقاف", "callback_data": f"subact:pause:{cid}"},
@@ -483,12 +422,9 @@ def _handle_callback(api, cfg, cb: dict):
             _panel_view_pending(api, cfg, cb)
         return
     elif kind == "entered":
-        with store.conn() as c:
-            row = c.execute("SELECT 1 FROM subscriber_signals "
-                            "WHERE subscriber_chat_id=? AND signal_id=?", (uid, sid)).fetchone()
-            if row:
-                c.execute("UPDATE subscriber_signals SET entered_self=1 "
-                          "WHERE subscriber_chat_id=? AND signal_id=?", (uid, sid))
-                api.answer_callback(cb["id"], "تم تسجيل دخولك ✅")
-            else:
-                api.answer_callback(cb["id"], "هذه التوصية ليست في سجلك")
+        store = backend.get_backend()
+        if store.has_subscriber_signal(uid, sid):
+            store.mark_entered(uid, sid)
+            api.answer_callback(cb["id"], "تم تسجيل دخولك ✅")
+        else:
+            api.answer_callback(cb["id"], "هذه التوصية ليست في سجلك")

@@ -1,10 +1,11 @@
 """مسح الانتهاء: تنبيه قبل الانتهاء + إزالة تلقائية عند الانتهاء.
 
 يعمل من cycle.py كل ساعة. كل الإرسالات best-effort (لا تكسر الدورة).
+التخزين عبر `backend` (SQLite محليًا، Supabase على Actions).
 """
 from datetime import datetime, timezone
 
-from . import store
+from . import backend
 
 
 def _parse(ts: str):
@@ -16,28 +17,26 @@ def _parse(ts: str):
 
 
 def sweep(api, cfg):
+    store = backend.get_backend()
     now = datetime.now(timezone.utc)
-    with store.conn() as c:
-        rows = c.execute("SELECT chat_id, expires_at, invite_link, warned "
-                         "FROM subscribers WHERE status='active'").fetchall()
-        for chat_id, exp_s, link, warned in rows:
-            exp = _parse(exp_s) if exp_s else None
-            if not exp:
-                continue
-            if exp <= now:
-                c.execute("UPDATE subscribers SET status='expired' WHERE chat_id=?",
-                          (chat_id,))
-                try:
-                    api.ban(cfg.channel_id, chat_id)
-                    if link:
-                        api.revoke_invite_link(cfg.channel_id, link)
-                except Exception:
-                    pass
-            elif (exp - now).days < cfg.expiry_warn_days and not warned:
-                try:
-                    api.send_message(chat_id,
-                                     f"⏰ اشتراكك ينتهي {exp.strftime('%Y-%m-%d')} — "
-                                     "تواصل مع محمد للتجديد قبل انتهائه.")
-                except Exception:
-                    pass
-                c.execute("UPDATE subscribers SET warned=1 WHERE chat_id=?", (chat_id,))
+    for sub in store.list_active_for_sweep():
+        chat_id = sub["chat_id"]
+        exp = _parse(sub["expires_at"]) if sub.get("expires_at") else None
+        if not exp:
+            continue
+        if exp <= now:
+            store.set_subscriber_status(chat_id, "expired")
+            try:
+                api.ban(cfg.channel_id, chat_id)
+                if sub.get("invite_link"):
+                    api.revoke_invite_link(cfg.channel_id, sub["invite_link"])
+            except Exception:
+                pass
+        elif (exp - now).days < cfg.expiry_warn_days and not sub.get("warned"):
+            try:
+                api.send_message(chat_id,
+                                 f"⏰ اشتراكك ينتهي {exp.strftime('%Y-%m-%d')} — "
+                                 "تواصل مع محمد للتجديد قبل انتهائه.")
+            except Exception:
+                pass
+            store.set_warned(chat_id)

@@ -2,23 +2,18 @@
 
 التلقائي: بعد auto_after_reviewed توصية مراجَعة (30 افتراضيًا)،
 ينقلب الوضع إلى auto تلقائيًا — كما في التصميم.
+التخزين عبر `backend` (SQLite محليًا، Supabase على Actions).
 """
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import cards, publisher, store
-
-
-def _now():
-    return datetime.now(timezone.utc).isoformat()
+from . import backend, cards, publisher
 
 
 def queue(api, cfg, signal_id: int, card_text: str, chart_path=None) -> str:
     """يضع التوصية في الطابور. يرجع 'published' أو 'pending'."""
-    with store.conn() as c:
-        c.execute("INSERT OR REPLACE INTO pending(signal_id, card_text, chart_path, status, created_at) "
-                  "VALUES(?,?,?, 'pending', ?)",
-                  (signal_id, card_text, str(chart_path) if chart_path else None, _now()))
+    store = backend.get_backend()
+    store.queue_pending(signal_id, card_text, chart_path)
     if cfg.mode == "auto":
         publisher.publish(api, cfg, signal_id)
         return "published"
@@ -36,13 +31,13 @@ def queue(api, cfg, signal_id: int, card_text: str, chart_path=None) -> str:
 
 
 def approve(api, cfg, signal_id: int) -> bool:
-    with store.conn() as c:
-        row = c.execute("SELECT status FROM pending WHERE signal_id=?",
-                        (signal_id,)).fetchone()
-        if not row or row[0] not in ("pending", "approved"):
-            return False
-        c.execute("UPDATE pending SET status='approved', reviewed_at=? "
-                  "WHERE signal_id=?", (_now(), signal_id))
+    store = backend.get_backend()
+    row = store.get_pending(signal_id)
+    if not row or row["status"] not in ("pending", "approved"):
+        return False
+    reviewed_by = (cfg.admin_ids or [None])[0]
+    if not store.set_review_status(signal_id, "approved", reviewed_by=reviewed_by):
+        return False
     publisher.publish(api, cfg, signal_id)
     cfg.set("reviewed_count", (cfg.reviewed_count or 0) + 1)
     if cfg.mode == "review" and cfg.reviewed_count >= cfg.auto_after_reviewed:
@@ -51,11 +46,9 @@ def approve(api, cfg, signal_id: int) -> bool:
 
 
 def reject(cfg, signal_id: int) -> bool:
-    with store.conn() as c:
-        row = c.execute("SELECT status FROM pending WHERE signal_id=?",
-                        (signal_id,)).fetchone()
-        if not row or row[0] != "pending":
-            return False
-        c.execute("UPDATE pending SET status='rejected', reviewed_at=? "
-                  "WHERE signal_id=?", (_now(), signal_id))
-    return True
+    store = backend.get_backend()
+    row = store.get_pending(signal_id)
+    if not row or row["status"] != "pending":
+        return False
+    reviewed_by = (cfg.admin_ids or [None])[0]
+    return store.set_review_status(signal_id, "rejected", reviewed_by=reviewed_by)

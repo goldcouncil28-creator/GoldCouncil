@@ -1,8 +1,13 @@
 """عميل Bot API خفيف (stdlib فقط) — نفس الطريق المُجرَّب من الـ VM.
 
 curl أثبت الوصول لـ api.telegram.org من هنا؛ urllib يفعل الشيء نفسه.
+
+وضع التجربة (GC_DRY_RUN=1): كل الإرسالات/التعديلات/الحظر stubbed —
+تُسجَّل ولا تُرسَل. getUpdates يبقى حيًا (قراءة فقط) حتى يمرّر التدريب
+تحديثات حقيقية عبر المعالجة. يُستخدم في أول اختبار على Actions.
 """
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -15,8 +20,17 @@ class ApiError(Exception):
 class BotApi:
     def __init__(self, token: str):
         self.base = f"https://api.telegram.org/bot{token}"
+        self.dry = os.environ.get("GC_DRY_RUN", "0") == "1"
 
     def _call(self, method: str, payload: dict, retries: int = 3):
+        if self.dry and method != "getUpdates":
+            print(f"dry-run BotApi.{method} (stubbed, not sent): "
+                  f"{str(payload)[:160]}")
+            if method in ("sendMessage", "sendPhoto"):
+                return {"message_id": 0}
+            if method == "createChatInviteLink":
+                return {"invite_link": "https://t.me/dry-run-invite"}
+            return True
         body = json.dumps(payload).encode()
         last = None
         for _ in range(retries):

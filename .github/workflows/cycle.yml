@@ -1,0 +1,63 @@
+# Gold Council — hourly cycle (pipeline → queue → settle → expiry sweep)
+# Design: design/github-actions-hosting.md §3, §5, §6, §7
+# Runs at minute :07 to avoid exact-minute collision with the poller.
+# State lives in Supabase (GC_STORE=supabase); nothing persists on the runner
+# except the best-effort market-data cache (system/data/*.parquet).
+# Fail-closed: if secrets are missing the bot exits 0 ("not configured, skipping").
+
+name: cycle
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (stub Telegram sends, no Supabase writes)'
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: gc-cycle
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    name: cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GC_STORE: supabase
+      GC_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r system/requirements-actions.txt
+
+      - name: Restore market-data cache
+        uses: actions/cache@v4
+        with:
+          path: system/data/*.parquet
+          # Unique key per run: actions/cache only saves when the exact key
+          # MISSES, so a static key would freeze the cache at the first
+          # download and every later run would re-download (6h freshness).
+          # run_id forces a save each run; restore-keys picks up the latest.
+          key: gc-market-data-${{ github.run_id }}
+          restore-keys: |
+            gc-market-data-
+
+      - name: Run cycle (pipeline → queue → settle → expiry)
+        working-directory: system
+        run: python -m telegram_bot.cycle

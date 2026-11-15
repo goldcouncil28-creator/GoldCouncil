@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from telegram_bot.api import BotApi
 from telegram_bot.config import Config
-from telegram_bot import expiry, review, settle
+from telegram_bot import backend, expiry, review, settle
 
 
 def main() -> int:
@@ -27,7 +27,7 @@ def main() -> int:
     try:
         from data_loader import load_xauusd_h1, load_dxy_proxy, load_oil
         from pipeline import run_pipeline, build_ctx
-        import journal
+        store = backend.get_backend()
         df = load_xauusd_h1()
         try:
             dxy = load_dxy_proxy()
@@ -37,14 +37,21 @@ def main() -> int:
         res = run_pipeline(df, build_ctx(df, dxy, oil))
         if res["status"] == "signal":
             card = res["card"]
-            sid = journal.log_signal(card, res["verdict"].votes, mode="paper")
+            sid = store.log_signal(card, res["verdict"].votes,
+                                   e1=res.get("e1"), m3=res.get("m3"),
+                                   r0=res.get("r0"), mode="paper")
             if sid == -1:
                 print("bot: daily cap reached")
+            elif sid == -2:
+                print("bot: duplicate signal, skipped")
             else:
                 chart = None
                 try:
                     from telegram_bot.charts import render_signal_chart
-                    chart = render_signal_chart(df, card)
+                    chart = render_signal_chart(
+                        df, card,
+                        path=Path(__file__).parent / "charts" /
+                        f"signal_{card.symbol}_{sid}.png")
                 except Exception as e:
                     print(f"bot: chart failed: {type(e).__name__}")
                 print(f"bot: queued signal #{sid} -> "

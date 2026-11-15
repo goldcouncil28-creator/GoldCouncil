@@ -46,5 +46,5 @@ def result_line(status: str, pnl_r: float | None) -> str:
     if status == "sl":
         return "\n\n❌ ضرب وقف الخسارة (-1R)"
     if status == "expired":
-        return f"\n\n⏱️ انتهت الصلاحية ({pnl_r:+.2f}R)" if pnl_r is not None else "\n\n⏱️ انتهت الصلاحية"
+        return f"\n\n⏱️ انتهت الصلاحية ({pnl_r:+.2f}R)" if pnl_r is not None else "\n\n⏱️ انتهت الصلاحية — سعر الإغلاق غير متاح"
     return ""
