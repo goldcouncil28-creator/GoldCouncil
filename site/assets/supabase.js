@@ -26,6 +26,13 @@
   function publishedSignals() {
     return get("signals?select=id,created_at,symbol,direction,entry,stop_loss,tp1,tp2,confidence,status,mode,review_status&review_status=eq.published&order=created_at.desc&limit=200");
   }
+  /* Closed paper signals (any review_status) — the public journal.
+     RLS (migration 0004) exposes only CLOSED rows (tp1/tp2/sl/expired);
+     open/pending setups stay service-only. pnl_r is included: the
+     journal shows real returns, not dashes. */
+  function closedSignals() {
+    return get("signals?select=id,created_at,symbol,direction,entry,stop_loss,tp1,tp2,confidence,status,pnl_r,mode,review_status&status=in.(tp1,tp2,sl,expired)&order=created_at.desc&limit=200");
+  }
   function settlements() {
     return get("settlements?select=signal_id,outcome,exit_price,pnl_r,settled_at&order=settled_at.desc&limit=500");
   }
@@ -62,6 +69,7 @@
   var RESULT_AR = { tp1: "🎯 هدف أول", tp2: "🎯🎯 هدف ثانٍ", sl: "⛔ وقف خسارة", open: "⏳ مفتوحة", expired: "⌛ منتهية" };
   global.GC = {
     publishedSignals: publishedSignals,
+    closedSignals: closedSignals,
     settlements: settlements,
     activeFaq: activeFaq,
     distinctStats: distinctStats,

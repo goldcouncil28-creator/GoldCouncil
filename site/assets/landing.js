@@ -1,7 +1,9 @@
 /* Gold Council landing — journal + FAQ, live from Supabase (read-only, anon).
    No invented numbers, ever: stats are the honest DISTINCT-setup record
-   computed from the published signals Supabase returns. With 0 closed
-   setups the page shows the honest paper-phase empty state. */
+   computed from the CLOSED paper signals Supabase returns (migration
+   0004 exposes closed rows only; open/pending setups stay hidden).
+   The journal auto-refreshes every hour so an open page stays current.
+   With 0 closed setups the page shows the honest paper-phase empty state. */
 (function () {
   "use strict";
 
@@ -143,13 +145,19 @@
     });
   }
 
-  Promise.all([GC.publishedSignals(), GC.settlements()])
-    .then(function (res) { renderJournal(res[0], res[1]); })
-    .catch(function () {
-      statsBox.textContent = "";
-      bodyBox.textContent = "";
-      bodyBox.appendChild(el("p", "empty", T("j_err")));
-    });
+  function loadJournal() {
+    Promise.all([GC.closedSignals(), GC.settlements()])
+      .then(function (res) { renderJournal(res[0], res[1]); })
+      .catch(function () {
+        statsBox.textContent = "";
+        bodyBox.textContent = "";
+        bodyBox.appendChild(el("p", "empty", T("j_err")));
+      });
+  }
+  loadJournal();
+  /* Hourly auto-refresh: the data is live on every load already; this
+     keeps an open page current without a manual reload. */
+  setInterval(loadJournal, 3600000);
 
   GC.activeFaq()
     .then(renderFaq)
