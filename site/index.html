@@ -463,10 +463,6 @@ button{font-family:inherit;cursor:pointer}
 
     <div class="action-btns">
       <button class="lang-btn" id="langBtn" onclick="toggleLang()">🌐 EN</button>
-      <button class="btn-dl" onclick="downloadCurrentCode()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        تحميل الملف كاملاً
-      </button>
       <a class="btn-cta" href="https://t.me/BigNagy" target="_blank">
         طلب الانضمام ↗
       </a>
@@ -629,7 +625,7 @@ button{font-family:inherit;cursor:pointer}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center">
         <div class="video-preview-box">
           <div class="video-bg-placeholder"></div>
-          <button class="play-btn-cyber" onclick="alert('الفيديو التعريفي قيد الإعداد — سيُنشر هنا فور جاهزيته.')">
+          <button class="play-btn-cyber" onclick="gcVideoSoon()">
             ▶
           </button>
           <div style="position:absolute;bottom:12px;left:14px;font-family:var(--font-mono);font-size:10px;color:var(--gold)">
@@ -948,11 +944,37 @@ updateClock();
 // On failure the LAST KNOWN price stays on screen and the status
 // flips to OFFLINE — never a simulated price.
 let firstGoldPrice = null;
-async function fetchGoldPrice(){
+let lastGoldPrice = null;
+let lastGoldOk = false;
+let lastGoldTime = null;
+function gcRefreshPriceTexts(){
   const dot = document.getElementById('priceDot');
   const statusEl = document.getElementById('priceStatus');
   const teleDot = document.getElementById('teleDot');
   const teleStatus = document.getElementById('teleStatus');
+  const chg = document.getElementById('priceChange');
+  const upd = document.getElementById('priceUpdated');
+  if(lastGoldOk){
+    if(teleStatus) teleStatus.textContent = gcT('مباشر');
+    if(statusEl) statusEl.textContent = gcT('مباشر • GOLD-API');
+    if(dot) dot.style.background = 'var(--green)';
+    if(teleDot) teleDot.style.background = 'var(--green)';
+    if(firstGoldPrice !== null && lastGoldPrice !== null && chg){
+      const diff = lastGoldPrice - firstGoldPrice;
+      const pct = firstGoldPrice ? (diff / firstGoldPrice * 100) : 0;
+      const sign = diff >= 0 ? '▲ +' : '▼ ';
+      chg.textContent = sign + Math.abs(diff).toFixed(2) + ' (' + (diff >= 0 ? '+' : '') + pct.toFixed(2) + '%) ' + gcT('منذ فتح الصفحة');
+      chg.style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+    if(upd && lastGoldTime) upd.textContent = gcT('آخر تحديث: ') + lastGoldTime + gcT(' — المصدر: gold-api.com (سبوت، وليس عقوداً آجلة)');
+  } else {
+    if(teleStatus) teleStatus.textContent = gcT('غير متصل');
+    if(statusEl) statusEl.textContent = gcT('غير متصل — آخر سعر معروف');
+    if(dot) dot.style.background = 'var(--red)';
+    if(teleDot) teleDot.style.background = 'var(--red)';
+  }
+}
+async function fetchGoldPrice(){
   try{
     const res = await fetch('https://api.gold-api.com/price/XAU');
     if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -960,33 +982,20 @@ async function fetchGoldPrice(){
     const price = Number(data.price);
     if(!isFinite(price)) throw new Error('bad price');
     if(firstGoldPrice === null) firstGoldPrice = price;
+    lastGoldPrice = price;
+    lastGoldOk = true;
+    lastGoldTime = new Date().toLocaleTimeString('en-GB');
     const formatted = price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const pElem = document.getElementById('priceVal');
     if(pElem) pElem.textContent = formatted;
     const tElem = document.getElementById('telePrice');
     if(tElem) tElem.textContent = '$' + formatted;
-    if(teleStatus) teleStatus.textContent = 'مباشر';
-    if(statusEl) statusEl.textContent = 'مباشر • GOLD-API';
-    if(dot) dot.style.background = 'var(--green)';
-    if(teleDot) teleDot.style.background = 'var(--green)';
-    const chg = document.getElementById('priceChange');
-    if(chg){
-      const diff = price - firstGoldPrice;
-      const pct = firstGoldPrice ? (diff / firstGoldPrice * 100) : 0;
-      const sign = diff >= 0 ? '▲ +' : '▼ ';
-      chg.textContent = sign + Math.abs(diff).toFixed(2) + ' (' + (diff >= 0 ? '+' : '') + pct.toFixed(2) + '%) منذ فتح الصفحة';
-      chg.style.color = diff >= 0 ? 'var(--green)' : 'var(--red)';
-    }
-    const upd = document.getElementById('priceUpdated');
-    if(upd) upd.textContent = 'آخر تحديث: ' + new Date().toLocaleTimeString('en-GB') + ' — المصدر: gold-api.com (سبوت، وليس عقوداً آجلة)';
+    gcRefreshPriceTexts();
   }catch(e){
-    if(statusEl) statusEl.textContent = 'غير متصل — آخر سعر معروف';
-    if(teleStatus) teleStatus.textContent = 'غير متصل';
-    if(dot) dot.style.background = 'var(--red)';
-    if(teleDot) teleDot.style.background = 'var(--red)';
+    lastGoldOk = false;
+    gcRefreshPriceTexts();
   }
 }
-fetchGoldPrice();
 setInterval(fetchGoldPrice, 30000);
 
 // Risk & Lot Calculator
@@ -1000,59 +1009,231 @@ function calculateLot(){
   lot = Math.max(0.01, Math.round(lot * 100) / 100);
 
   document.getElementById('resLot').innerText = lot.toFixed(2);
-  document.getElementById('resMoneyRisk').innerText = 'المبلغ المعرض للمخاطرة: $' + moneyRisk.toFixed(2);
+  document.getElementById('resMoneyRisk').innerText = gcT('المبلغ المعرض للمخاطرة: $') + moneyRisk.toFixed(2);
 }
 
 // 35 Analyst Nodes — the REAL agent roster (names + layers, no invented scores)
-const GC_AGENTS = [
-  ['R0','النظام والاتجاه العام','L0'],['N0','حظر الأخبار','L0'],['R1','الصدمات','L0'],['R2','السيولة','L0'],
-  ['C1','الاقتصاد الكلي','L1'],['C2','المعنويات','L1'],['C3','الجيوسياسة','L1'],['C4','الأجندة الاقتصادية','L1'],['C5','تقارير COT','L1'],['C6','الأسواق المترابطة','L1'],['C7','النفط','L1'],
-  ['S1','الدعم والمقاومة','L2'],['S2','فيبوناتشي','L2'],['S3a','النماذج التوافقية','L2'],['S3b','النماذج الكلاسيكية','L2'],['S4a','السيولة الذكية SMC','L2'],['S4b','وايكوف','L2'],['S4c','موجات إليوت','L2'],['S5a','الزخم','L2'],['S5b','الاتجاه','L2'],['S5c','التذبذب','L2'],['S6','زوايا جان','L2'],['S10','التدفقات','L2'],['S11','الشموع','L2'],['S12','بروفايل الحجم','L2'],['S13','الموسمية','L2'],
-  ['X1','جدران العرض والطلب','L3'],['X2','دلتا الصفقات','L3'],['X3','تدفق الأوامر','L3'],
-  ['M1','الحكم والقرار','L4'],['M2','إدارة المخاطر','L4'],['M3','محامي الشيطان','L4'],['E1','المقيّم وبوابة النشر','L4'],['E2','المحسّن','L4'],['J1','محلل السجل والتعلم','L4']
-];
+const GC_AGENTS = [["R0", "النظام والاتجاه العام", "Regime & overall trend", "L0"], ["N0", "حظر الأخبار", "News blackout", "L0"], ["R1", "الصدمات", "Shocks", "L0"], ["R2", "السيولة", "Liquidity", "L0"], ["C1", "الاقتصاد الكلي", "Macroeconomics", "L1"], ["C2", "المعنويات", "Sentiment", "L1"], ["C3", "الجيوسياسة", "Geopolitics", "L1"], ["C4", "الأجندة الاقتصادية", "Economic calendar", "L1"], ["C5", "تقارير COT", "COT reports", "L1"], ["C6", "الأسواق المترابطة", "Intermarket", "L1"], ["C7", "النفط", "Oil", "L1"], ["S1", "الدعم والمقاومة", "Support & resistance", "L2"], ["S2", "فيبوناتشي", "Fibonacci", "L2"], ["S3a", "النماذج التوافقية", "Harmonic patterns", "L2"], ["S3b", "النماذج الكلاسيكية", "Classical patterns", "L2"], ["S4a", "السيولة الذكية SMC", "Smart Money SMC", "L2"], ["S4b", "وايكوف", "Wyckoff", "L2"], ["S4c", "موجات إليوت", "Elliott waves", "L2"], ["S5a", "الزخم", "Momentum", "L2"], ["S5b", "الاتجاه", "Trend", "L2"], ["S5c", "التذبذب", "Volatility", "L2"], ["S6", "زوايا جان", "Gann angles", "L2"], ["S10", "التدفقات", "Flows", "L2"], ["S11", "الشموع", "Candles", "L2"], ["S12", "بروفايل الحجم", "Volume profile", "L2"], ["S13", "الموسمية", "Seasonality", "L2"], ["X1", "جدران العرض والطلب", "Supply/demand walls", "L3"], ["X2", "دلتا الصفقات", "Trade delta", "L3"], ["X3", "تدفق الأوامر", "Order flow", "L3"], ["M1", "الحكم والقرار", "Arbiter & decision", "L4"], ["M2", "إدارة المخاطر", "Risk management", "L4"], ["M3", "محامي الشيطان", "Devil's advocate", "L4"], ["E1", "المقيّم وبوابة النشر", "Evaluator & publishing gate", "L4"], ["E2", "المحسّن", "Optimizer", "L4"], ["J1", "محلل السجل والتعلم", "Journal analyst & learning", "L4"]];
 function initNodes(){
   const container = document.getElementById('nodesContainer');
   if(!container) return;
   container.innerHTML = GC_AGENTS.map(function(a, i){
-    return '<div class="node-card"><div class="node-top"><span class="node-id">NODE #' + String(i+1).padStart(2,'0') + ' · ' + a[0] + '</span><span class="node-status"></span></div><div class="node-name">' + a[0] + '</div><div class="node-spec">' + a[1] + '</div><div class="node-score">الطبقة ' + a[2] + '</div></div>';
+    const role = gcLang === 'ar' ? a[1] : a[2];
+    const layer = (gcLang === 'ar' ? 'الطبقة ' : 'Layer ') + a[3];
+    return '<div class="node-card"><div class="node-top"><span class="node-id">NODE #' + String(i+1).padStart(2,'0') + ' · ' + a[0] + '</span><span class="node-status"></span></div><div class="node-name">' + a[0] + '</div><div class="node-spec">' + role + '</div><div class="node-score">' + layer + '</div></div>';
   }).join('');
 }
 
-// Language Switcher (AR <-> EN)
-let currentLang = 'ar';
-function toggleLang(){
-  const html = document.documentElement;
-  currentLang = currentLang === 'ar' ? 'en' : 'ar';
-  html.lang = currentLang;
-  html.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
-  
+
+// ---- Full AR/EN i18n ----
+const GC_I18N = {
+  "جارٍ تهيئة واجهة مجلس الذهب الشاملة…": "Initializing the Gold Council terminal…",
+  "جارٍ التحميل…": "Loading…",
+  "المحللون:": "Analysts:",
+  "35 خبيراً": "35 experts",
+  "الانضمام:": "Joining:",
+  "قائمة انتظار — تفعيل يدوي": "Waitlist — manual activation",
+  "مجلس الذهب": "Gold Council",
+  "الرئيسية HUD": "Home HUD",
+  "سجل الصفقات والنتائج": "Signals & Results Journal",
+  "غرفة الـ 35 خبيراً": "The 35 Experts Room",
+  "نماذج واستراتيجيات": "Models & Strategies",
+  "حاسبة اللوت وإدارة المخاطر": "Lot & Risk Management Calculator",
+  "الانضمام وقائمة الانتظار": "Join & Waitlist",
+  "انضم": "Join",
+  "طلب الانضمام ↗": "Request to Join ↗",
+  "مش رأي محلل واحد…": "Not one analyst's opinion…",
+  "دي قراءة مجلس كامل بمحرك إجماع رقمي.": "It's a whole council's vision via a digital consensus engine.",
+  "توصيات وتحليلات فوركس وذهب (XAUUSD) مبنية على تلاقي رؤى 35 خبيراً ومحللاً، مع خطط تداول محكمة وإدارة مخاطر صارمة لا تترك مجالاً للعشوائية.": "Forex and gold (XAUUSD) signals and analysis built on the combined vision of 35 experts and analysts, with disciplined trade plans and strict risk management that leaves no room for randomness.",
+  "طلب الانضمام للمجلس ↗": "Request to Join the Council ↗",
+  "استعراض سجل النتائج الحقيقي": "View the Real Results Journal",
+  "حاسبة إدارة المخاطر": "Risk Calculator",
+  "جارٍ تحميل السعر…": "Loading price…",
+  "السعر الفوري للذهب (سبوت) — يتحدث كل 30 ثانية من gold-api.com. التغير المعروض منذ فتح الصفحة، وليس التغير الرسمي لليوم.": "Gold spot price — updates every 30 seconds from gold-api.com. The change shown is since the page opened, not the official daily change.",
+  "محلل وخبير ضمن الرؤية الجماعية": "analysts and experts in the collective vision",
+  "صفقات يومية بحد أقصى (الجودة أولاً)": "trades per day max (quality first)",
+  "وضوح كامل لشروط الدخول والوقف والأهداف": "full clarity of entry, stop and target conditions",
+  "يدوي": "Manual",
+  "تفعيل يدوي عبر الأدمن — قائمة انتظار": "Manual activation via the admin — waitlist",
+  "آخر توصية مغلقة — من السجل الحقيقي": "Latest Closed Signal — From the Real Journal",
+  "تُسحب مباشرة من قاعدة بيانات المجلس — لا أرقام توضيحية": "Pulled live from the Council's database — no illustrative numbers",
+  "جارٍ تحميل آخر توصية…": "Loading the latest signal…",
+  "ملاحظة:": "Note:",
+  "التوصيات الحالية ورقية (Paper) — لا أموال حقيقية، والسجل الكامل في تبويب «سجل الصفقات والنتائج».": "Current signals are paper (Paper) — no real money. The full journal is in the «Signals & Results Journal» tab.",
+  "لماذا يثق أعضاء مجلس الذهب؟": "Why do Gold Council members trust us?",
+  "لأن كل توصية تأتي مكتملة: دخول محدد، وقف صارم، أهداف واضحة، وسبب فني. لا وعود غير واقعية ولا إشارات عشوائية — فقط رؤية واضحة وسجل ورقي ورقمي يحاسب عليه الجميع.": "Because every signal comes complete: a defined entry, a strict stop, clear targets, and a technical reason. No unrealistic promises, no random signals — just a clear vision and a paper and digital journal everyone can hold us to.",
+  "✓ دخول محدد بالرقم": "✓ Defined entry price",
+  "✓ وقف خسارة صارم": "✓ Strict stop loss",
+  "✓ أهداف محددة": "✓ Defined targets",
+  "انضم الآن عبر التيليجرام ↗": "Join Now via Telegram ↗",
+  "VIDEO: الفيديو التعريفي — قريباً": "VIDEO: Intro video — coming soon",
+  "الفيديو التعريفي — قريباً": "Intro Video — Coming Soon",
+  "فيديو تعريفي قصير عن المجلس وطريقة عمل التوصيات — قيد الإعداد، وسيُنشر هنا فور جاهزيته.": "A short intro video about the Council and how signals work — in preparation, and will be published here as soon as it is ready.",
+  "تنبيهات تيليجرام مع شارت مرفق لكل توصية": "Telegram alerts with an attached chart for every signal",
+  "سجل ورقي موثق — الرابحة والخاسرة معروضتان": "Documented paper journal — winners and losers both shown",
+  "سجل حقيقي وشفاف… حتى الخسارة معروضة قبل الربح": "A real, transparent journal… even losses are shown before wins",
+  "أرقام ونتائج موثقة — لا أرباح وهمية، ولا صفقات مخفية. السجل هو الحجة الوحيدة التي نعترف بها.": "Documented figures and results — no fake profits, no hidden trades. The journal is the only proof we recognize.",
+  "● سجل معتمد ومحدث 2026": "● Certified journal, updated 2026",
+  "● PAPER AUDIT — نتائج مرحلة التوثيق الورقي": "● PAPER AUDIT — Paper-documentation phase results",
+  "متوسط العائد لكل صفقة مغلقة · إجمالي المحقق:": "Average return per closed trade · Total realized:",
+  "إجمالي الصفقات المغلقة": "Total closed trades",
+  "نسبة الربح والخسارة": "Win / loss split",
+  "نسبة الفوز (Win Rate)": "Win rate",
+  "موثقة": "documented",
+  "الدلالة الإحصائية": "Statistical significance",
+  "قواعد النشر والشفافية الصارمة": "Strict publishing and transparency rules",
+  "كل صفقة تدون كما حدثت تماماً — بلا تجميل أو إعادة تسعير.": "Every trade is recorded exactly as it happened — no beautifying, no re-pricing.",
+  "TP1 — الأهداف الأولى": "TP1 — First targets",
+  "Stop Loss — وقف الخسارة": "Stop Loss — loss stops",
+  "الصفقات المنتهية بالدخول": "Expired trades",
+  "القاعدة الذهبية": "The golden rule",
+  "إدارة المخاطر تسبق البحث عن الربح": "Risk management comes before chasing profit",
+  "الصفقات المغلقة — السجل الورقي الحقيقي": "Closed Trades — The Real Paper Journal",
+  "التاريخ": "Date",
+  "الأداة / الزوج": "Instrument / Pair",
+  "الاتجاه": "Direction",
+  "الدخول": "Entry",
+  "الوقف SL": "Stop SL",
+  "الأهداف TP1 · TP2": "Targets TP1 · TP2",
+  "النتيجة": "Result",
+  "العائد": "Return",
+  "جارٍ تحميل السجل الحقيقي من قاعدة البيانات…": "Loading the real journal from the database…",
+  "مرحلة ورقية (Paper) — لا أموال حقيقية. الأرقام من قاعدة بيانات مجلس الذهب (Supabase) وتتحدث تلقائياً كل ساعة.": "Paper phase (Paper) — no real money. Figures come from the Gold Council database (Supabase) and update automatically every hour.",
+  "شبكة العقد التحليلية الـ 35 (Analyst Nodes)": "The 35 Analyst Nodes Network",
+  "تلاقي مدارس التحليل المختلفة (SMC, Order Flow, Macro, Wyckoff) لضمان اتخاذ قرار جماعي مدروس.": "Different analysis schools meet (SMC, Order Flow, Macro, Wyckoff) to ensure a considered collective decision.",
+  "● 35 خبيراً — أسماء الوكلاء الحقيقية": "● 35 experts — the real agents' names",
+  "ركائز العمل واستراتيجيات التحليل المؤسسي": "Working Pillars and Institutional Analysis Strategies",
+  "المنهجية الفنية المتبعة قبل إصدار أي توصية لضمان أعلى درجات الانضباط المالي:": "The technical methodology followed before issuing any signal, to guarantee the highest financial discipline:",
+  "01 / التحليل الجماعي (Sync)": "01 / Collective Analysis (Sync)",
+  "قراءة متعددة للسوق تجمع وجهات نظر 35 محللاً قبل طرح التوصية، والخلاف يحسم بالأرقام والنسب لا بالصوت الأعلى.": "A multi-angle market read that gathers 35 analysts' views before a signal is proposed; disagreements are settled by numbers and ratios, not the loudest voice.",
+  "02 / خطة تداول متكاملة (Plan)": "02 / Complete Trade Plan (Plan)",
+  "نقطة دخول، وقف خسارة، وهدفان (TP1/TP2)، مع رسم بياني واضح وشرح الفكرة لتعرف سبب الدخول وموعد الخروج قبل الضغط على الزر.": "An entry point, a stop loss, and two targets (TP1/TP2), with a clear chart and an explanation of the idea, so you know why to enter and when to exit before pressing the button.",
+  "03 / الانتقائية في الفرص (Filter)": "03 / Selectivity in Opportunities (Filter)",
+  "بحد أقصى ثلاث توصيات يومياً. إن لم توجد فرصة قوية تستحق المخاطرة فلا توجد توصية — فالصمت قرار مدروس وليس غياباً.": "A maximum of three signals per day. If there is no strong opportunity worth the risk, there is no signal — silence is a considered decision, not an absence.",
+  "04 / سجل نتائج مفتوح (Ledger)": "04 / Open Results Journal (Ledger)",
+  "عرض الصفقات الرابحة والخاسرة بوضوح تام دون إخفاء النتائج السلبية، فالسجل هو البرهان الوحيد على المصداقية.": "Winning and losing trades shown in full clarity without hiding negative results — the journal is the only proof of credibility.",
+  "05 / إدارة المخاطر (Risk)": "05 / Risk Management (Risk)",
+  "مستويات وقف وأهداف محددة والتزام بحجم مخاطرة لا يتجاوز 1-2% لكل صفقة — حماية رأس المال مقدمة على مضاعفة الأرباح.": "Defined stop and target levels and a commitment to risk no more than 1–2% per trade — protecting capital comes before multiplying profits.",
+  "06 / اشتراك بإشراف الأدمن (Access)": "06 / Admin-Supervised Access (Access)",
+  "تفعيل ومتابعة يدوية مباشرة من مسؤول القناة بعد مراجعة الطلب لضمان انضباط الأعضاء. الأدمن المباشر:": "Manual activation and follow-up directly by the channel admin after reviewing the request, to keep members disciplined. Direct admin:",
+  "حاسبة إدارة المخاطر وتحديد حجم اللوت الذكي": "Risk Management & Smart Lot Size Calculator",
+  "حدد حجم العقد المناسب بدقة قبل فتح أي صفقة على الذهب XAUUSD لحماية رصيد حسابك:": "Determine the right contract size precisely before opening any XAUUSD gold trade, to protect your account balance:",
+  "رأس المال الإجمالي (USD):": "Total capital (USD):",
+  "نسبة المخاطرة المقبولة للصفقة (%):": "Acceptable risk per trade (%):",
+  "عدد نقاط وقف الخسارة (Stop Loss Pips):": "Stop-loss distance (pips):",
+  "إعادة الحساب اللحظي": "Recalculate Instantly",
+  "عقد موصى به (Standard Lot) على الذهب XAUUSD": "Recommended contract (Standard Lot) on XAUUSD gold",
+  "الانضمام إلى مجلس الذهب — قائمة انتظار": "Joining Gold Council — Waitlist",
+  "المرحلة الحالية: ورقية (Paper)": "Current phase: paper (Paper)",
+  "الانضمام — قائمة انتظار": "Joining — Waitlist",
+  "تفعيل يدوي": "Manual activation",
+  "عبر الأدمن": "via the admin",
+  "لا اشتراكات مدفوعة قبل اكتمال شهر التوثيق الورقي وإثبات الحافة الإحصائية. انضم لقائمة الانتظار وسيتواصل معك الأدمن مباشرة.": "No paid subscriptions before the paper-documentation month is complete and a statistical edge is proven. Join the waitlist and the admin will contact you directly.",
+  "⚡ 1 إلى 3 توصيات يومياً": "⚡ 1 to 3 signals per day",
+  "على الذهب XAUUSD — كحد أقصى": "on XAUUSD gold — maximum",
+  "📊 شارت وشرح فني": "📊 Chart and technical explanation",
+  "مع كل توصية": "with every signal",
+  "🔒 سجل ورقي موثق": "🔒 Documented paper journal",
+  "— الرابحة والخاسرة معروضتان": "— winners and losers both shown",
+  "طلب الانضمام عبر التيليجرام ↗": "Request to Join via Telegram ↗",
+  "الأسئلة الشائعة حول المجلس والتوصيات": "Frequently Asked Questions About the Council and Signals",
+  "هل التوصيات للذهب فقط؟": "Are the signals for gold only?",
+  "التركيز الأساسي والمحوري على الذهب XAUUSD، مع إمكانية نشر فرص فوركس انتقائية أخرى (مثل EURUSD / GBPUSD) بعد إثبات الحافة على الذهب أولاً، عندما تنطبق عليها معايير إجماع المجلس.": "The main and central focus is XAUUSD gold, with the possibility of publishing other selective forex opportunities (such as EURUSD / GBPUSD) after proving the edge on gold first, when they meet the Council's consensus criteria.",
+  "كم توصية يتم نشرها يومياً؟": "How many signals are published daily?",
+  "بحد أقصى ثلاث توصيات يومياً، وقد يقل العدد أو لا توجد أي توصية إطلاقاً في الأيام المتذبذبة حفاظاً على رأس المال وعدم التورط في صفقات غير واضحة المعالم.": "A maximum of three signals per day; the number may be lower, or there may be no signal at all on choppy days, to protect capital and avoid unclear trades.",
+  "هل يوجد سجل معتمد ومفتوح للنتائج؟": "Is there a certified, open results journal?",
+  "نعم، السجل الورقي والرقمي معروض بشفافية تامة في تبويب \"سجل الصفقات\"، متضمناً نقاط الدخول، وقف الخسارة، والصفقات الرابحة والخاسرة على حد سواء.": "Yes, the paper and digital journal is shown with full transparency in the 'Signals Journal' tab, including entry points, stop losses, and winning and losing trades alike.",
+  "هل تضمن التوصيات تحقيق أرباح مؤكدة؟": "Do the signals guarantee profits?",
+  "لا توجد أي توصية تضمن الربح في الأسواق المالية. التداول ينطوي على مخاطر، وإدارة رأس المال والالتزام الصارم باللوت المحسوب هي خط الدفاع الأول لأي متداول ناجح.": "No signal guarantees profit in the financial markets. Trading involves risk, and capital management plus strict commitment to the calculated lot size is any successful trader's first line of defense.",
+  "مجلس الذهب | GOLD COUNCIL — FINAL CYBER OS 6.0": "Gold Council | GOLD COUNCIL — FINAL CYBER OS 6.0",
+  "المسؤول المباشر:": "Direct admin:",
+  "تنبيه مخاطر وإخلاء مسؤولية قانونية:": "Risk warning and legal disclaimer:",
+  "تداول العملات الأجنبية والمعادن الثمينة (الذهب XAUUSD) ينطوي على درجة عالية من المخاطر المالية وقد لا يكون مناسباً لجميع المستثمرين. الروافع المالية يمكن أن تعمل لمصلحتك أو ضدك. المحتوى والتحليلات المقدمة من مجلس الذهب هي لأغراض تعليمية وإرشادية مبنية على رؤى جماعية، ولا تشكل دعوة حصرية أو ضماناً لأرباح مؤكدة. تأكد دائماً من إدارة رأس مالك بعناية وعدم المخاطرة بأموال لا تتحمل خسارتها.": "Trading foreign currencies and precious metals (XAUUSD gold) involves a high degree of financial risk and may not be suitable for all investors. Leverage can work for you or against you. The content and analysis provided by Gold Council are for educational and guidance purposes based on collective views, and do not constitute an exclusive invitation or a guarantee of assured profits. Always manage your capital carefully and never risk money you cannot afford to lose.",
+  "جميع الحقوق محفوظة © 2026 مجلس الذهب الدولي • إشراف الإدارة المباشرة @BigNagy": "All rights reserved © 2026 Gold Council International • Under the direct supervision of @BigNagy",
+  "تواصل مباشر مع الأدمن:": "Direct contact with the admin:",
+  "مباشر": "Live",
+  "غير متصل": "Offline",
+  "مباشر • GOLD-API": "Live • GOLD-API",
+  "غير متصل — آخر سعر معروف": "Offline — last known price",
+  "منذ فتح الصفحة": "since page opened",
+  "آخر تحديث: ": "Last update: ",
+  " — المصدر: gold-api.com (سبوت، وليس عقوداً آجلة)": " — Source: gold-api.com (spot, not futures)",
+  " — البيانات من قاعدة بيانات مجلس الذهب (Supabase)": " — Data from the Gold Council database (Supabase)",
+  "المبلغ المعرض للمخاطرة: $": "Amount at risk: $",
+  "تعذر تحميل السجل الحقيقي — تحقق من الاتصال وأعد تحميل الصفحة.": "Could not load the real journal — check your connection and reload the page.",
+  "صفقات": "trades",
+  "رابحة": "winners",
+  "خاسرة": "losers",
+  "منتهية": "expired",
+  "هدف أول": "First target",
+  "وقف خسارة": "Stop loss",
+  "شراء": "Buy",
+  "بيع": "Sell",
+  "الهدف الأول TP1": "First Target TP1",
+  "الهدف الثاني TP2": "Second Target TP2",
+  "الفيديو التعريفي قيد الإعداد — سيُنشر هنا فور جاهزيته.": "The intro video is in preparation — it will be published here as soon as it is ready."
+};
+const GC_TITLE_AR = "مجلس الذهب | GOLD COUNCIL — Ultimate Cyber Terminal OS 6.0";
+const GC_TITLE_EN = "Gold Council | GOLD COUNCIL — Ultimate Cyber Terminal OS 6.0";
+const GC_META_AR = "مجلس الذهب — تحليلات وتوصيات XAUUSD برؤية جماعية من 35 خبيراً، سعر ذهب فوري مباشر، سجل نتائج ورقي شفاف من قاعدة البيانات، وحاسبة مخاطر ذكية. الإشراف المباشر @BigNagy";
+const GC_META_EN = "Gold Council — XAUUSD analysis and signals from 35 experts, a live gold spot price, a transparent paper journal from the database, and a smart risk calculator. Direct supervision @BigNagy";
+let gcLang = 'ar';
+try { gcLang = localStorage.getItem('gc-lang') || 'ar'; } catch(e) { gcLang = 'ar'; }
+if(gcLang !== 'ar' && gcLang !== 'en') gcLang = 'ar';
+function gcT(ar){
+  if(gcLang === 'ar') return ar;
+  return GC_I18N[ar] !== undefined ? GC_I18N[ar] : ar;
+}
+function gcApplyLang(){
+  document.documentElement.lang = gcLang;
+  document.documentElement.dir = gcLang === 'ar' ? 'rtl' : 'ltr';
+  document.title = gcLang === 'ar' ? GC_TITLE_AR : GC_TITLE_EN;
+  const meta = document.querySelector('meta[name="description"]');
+  if(meta) meta.setAttribute('content', gcLang === 'ar' ? GC_META_AR : GC_META_EN);
   const langBtn = document.getElementById('langBtn');
-  if(langBtn) langBtn.textContent = currentLang === 'ar' ? '🌐 EN' : '🌐 عربي';
-  
-  const heroT = document.getElementById('heroTitle');
-  if(heroT){
-    if(currentLang === 'en'){
-      heroT.innerHTML = 'Not one analyst’s opinion…<br><span>It’s a whole council’s vision via digital consensus.</span>';
-    } else {
-      heroT.innerHTML = 'مش رأي محلل واحد…<br><span>دي قراءة مجلس كامل بمحرك إجماع رقمي.</span>';
+  if(langBtn) langBtn.textContent = gcLang === 'ar' ? '🌐 EN' : '🌐 عربي';
+  // Walk every body text node; swap exact matches (both directions).
+  const inv = {};
+  for(const k in GC_I18N) inv[GC_I18N[k]] = k;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: function(node){
+      const p = node.parentElement;
+      if(!p) return NodeFilter.FILTER_REJECT;
+      const tag = p.tagName;
+      if(tag === 'SCRIPT' || tag === 'STYLE') return NodeFilter.FILTER_REJECT;
+      if(p.closest('script,style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
     }
-  }
+  });
+  const nodes = [];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(function(n){
+    const raw = n.nodeValue;
+    const trimmed = raw.trim();
+    if(!trimmed) return;
+    if(gcLang === 'en' && GC_I18N[trimmed] !== undefined) {
+      n.nodeValue = raw.replace(trimmed, GC_I18N[trimmed]);
+    } else if(gcLang === 'ar' && inv[trimmed] !== undefined) {
+      n.nodeValue = raw.replace(trimmed, inv[trimmed]);
+    }
+  });
+  // Re-render every dynamic part in the new language.
+  initNodes();
+  loadJournal();
+  calculateLot();
+  gcRefreshPriceTexts();
+}
+// Language Switcher (AR <-> EN) — full translation, saved per visitor.
+function toggleLang(){
+  gcLang = gcLang === 'ar' ? 'en' : 'ar';
+  try { localStorage.setItem('gc-lang', gcLang); } catch(e) {}
+  gcApplyLang();
+}
+function gcVideoSoon(){
+  alert(gcT('الفيديو التعريفي قيد الإعداد — سيُنشر هنا فور جاهزيته.'));
 }
 
-// Download Full Code Function
-function downloadCurrentCode(){
-  const fullHtml = '<!doctype html>\n' + document.documentElement.outerHTML;
-  const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'gold-council-terminal-os-6.0.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+// Download removed — visitors must not download the site source.
 
 // Particle & HUD Canvas
 function initCyberCanvas(){
@@ -1118,12 +1299,13 @@ function initCyberCanvas(){
 // Same public key + query as the live site. No invented rows, ever.
 const GC_SB_URL = 'https://xxbtrtdjijrhmcbzmxxm.supabase.co';
 const GC_SB_KEY = 'sb_publishable_gjUSvtuFnrY5kYEsSuo-RA_0hoielo8';
-const DIR_AR_J = { long: 'شراء', short: 'بيع' };
+const GC_DIR = { long: {ar: 'شراء', en: 'Buy'}, short: {ar: 'بيع', en: 'Sell'} };
+function gcDir(d){ const e = GC_DIR[d] || {ar: d, en: d}; return gcLang === 'ar' ? e.ar : e.en; }
 function gcSetupKey(s){ return [s.symbol, s.direction, Number(s.entry), Number(s.stop_loss), Number(s.tp1), Number(s.tp2)].join('|'); }
 function gcResultLabel(s){
-  if(s.status === 'tp1' || s.status === 'tp2') return 'هدف أول';
-  if(s.status === 'sl') return 'وقف خسارة';
-  return 'منتهية';
+  if(s.status === 'tp1' || s.status === 'tp2') return gcT('هدف أول');
+  if(s.status === 'sl') return gcT('وقف خسارة');
+  return gcT('منتهية');
 }
 function gcPnlText(s){
   if(s.pnl_r === null || s.pnl_r === undefined) return '—';
@@ -1155,20 +1337,20 @@ async function loadJournal(){
     const setText = function(id, v){ const el = document.getElementById(id); if(el) el.textContent = v; };
     setText('statAvgR', (avg >= 0 ? '+' : '') + avg.toFixed(2));
     setText('statTotalR', (total >= 0 ? '+' : '') + total.toFixed(3) + 'R');
-    setText('statClosed', distinct.length + ' صفقات');
-    setText('statWins', wins + ' رابحة');
-    setText('statLosses', losses + ' خاسرة');
-    setText('statExpired', expired + ' منتهية');
+    setText('statClosed', distinct.length + ' ' + gcT('صفقات'));
+    setText('statWins', wins + ' ' + gcT('رابحة'));
+    setText('statLosses', losses + ' ' + gcT('خاسرة'));
+    setText('statExpired', expired + ' ' + gcT('منتهية'));
     setText('statWinRate', winRate + '%');
     setText('statT', tstat === null ? '—' : tstat.toFixed(2));
     setText('statTp1', '× ' + wins);
     setText('statSl', '× ' + losses);
     setText('statExp', '× ' + expired);
-    setText('journalUpdated', 'آخر تحديث: ' + new Date().toLocaleTimeString('en-GB') + ' — البيانات من قاعدة بيانات مجلس الذهب (Supabase)');
+    setText('journalUpdated', gcT('آخر تحديث: ') + new Date().toLocaleTimeString('en-GB') + gcT(' — البيانات من قاعدة بيانات مجلس الذهب (Supabase)'));
     if(body){
       body.innerHTML = distinct.map(function(s){
         const date = new Date(s.created_at).toLocaleDateString('en-GB');
-        const dir = DIR_AR_J[s.direction] || s.direction;
+        const dir = gcDir(s.direction);
         const cls = s.status === 'sl' ? 'loss' : (s.status === 'expired' ? '' : 'win');
         return '<tr><td class="mono">' + date + '</td><td><b>' + s.symbol + '</b></td><td><span class="badge-tag ' + cls + '">' + dir + '</span></td><td class="mono">' + Number(s.entry).toFixed(2) + '</td><td class="mono" style="color:var(--red)">' + Number(s.stop_loss).toFixed(2) + '</td><td class="mono" style="color:var(--green)">TP1 ' + Number(s.tp1).toFixed(2) + ' · TP2 ' + Number(s.tp2).toFixed(2) + '</td><td><span style="font-weight:700">' + gcResultLabel(s) + '</span></td><td><span style="font-weight:700">' + gcPnlText(s) + '</span></td></tr>';
       }).join('');
@@ -1176,28 +1358,26 @@ async function loadJournal(){
     const last = distinct[0];
     const lastBox = document.getElementById('lastSignalRows');
     if(lastBox && last){
-      const dir = DIR_AR_J[last.direction] || last.direction;
+      const dir = gcDir(last.direction);
       lastBox.innerHTML =
-        '<div class="sig-row-item"><span>الاتجاه</span><b class="' + (last.direction === 'short' ? 'red' : 'green') + '">' + dir + ' ' + last.symbol + '</b></div>' +
-        '<div class="sig-row-item"><span>الدخول</span><b class="gold">' + Number(last.entry).toFixed(2) + '</b></div>' +
-        '<div class="sig-row-item"><span>وقف الخسارة</span><b class="red">' + Number(last.stop_loss).toFixed(2) + '</b></div>' +
-        '<div class="sig-row-item"><span>الهدف الأول TP1</span><b class="green">' + Number(last.tp1).toFixed(2) + '</b></div>' +
-        '<div class="sig-row-item"><span>الهدف الثاني TP2</span><b class="green">' + Number(last.tp2).toFixed(2) + '</b></div>' +
-        '<div class="sig-row-item"><span>النتيجة</span><b>' + gcResultLabel(last) + ' (' + gcPnlText(last) + ')</b></div>' +
-        '<div class="sig-row-item"><span>التاريخ</span><b>' + new Date(last.created_at).toLocaleDateString('en-GB') + '</b></div>';
+        '<div class="sig-row-item"><span>' + gcT('الاتجاه') + '</span><b class="' + (last.direction === 'short' ? 'red' : 'green') + '">' + dir + ' ' + last.symbol + '</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('الدخول') + '</span><b class="gold">' + Number(last.entry).toFixed(2) + '</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('وقف الخسارة') + '</span><b class="red">' + Number(last.stop_loss).toFixed(2) + '</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('الهدف الأول TP1') + '</span><b class="green">' + Number(last.tp1).toFixed(2) + '</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('الهدف الثاني TP2') + '</span><b class="green">' + Number(last.tp2).toFixed(2) + '</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('النتيجة') + '</span><b>' + gcResultLabel(last) + ' (' + gcPnlText(last) + ')</b></div>' +
+        '<div class="sig-row-item"><span>' + gcT('التاريخ') + '</span><b>' + new Date(last.created_at).toLocaleDateString('en-GB') + '</b></div>';
     }
   }catch(e){
-    if(body) body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">تعذر تحميل السجل الحقيقي — تحقق من الاتصال وأعد تحميل الصفحة.</td></tr>';
+    if(body) body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">' + gcT('تعذر تحميل السجل الحقيقي — تحقق من الاتصال وأعد تحميل الصفحة.') + '</td></tr>';
   }
 }
-loadJournal();
 setInterval(loadJournal, 3600000);
 
 window.addEventListener('DOMContentLoaded', () => {
-  initNodes();
-  calculateLot();
+  gcApplyLang();
+  fetchGoldPrice();
   initCyberCanvas();
-  loadJournal();
 });
 </script>
 </body>
