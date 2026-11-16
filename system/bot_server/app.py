@@ -14,14 +14,17 @@ Endpoints (match the imported n8n workflows exactly):
     POST /api/v1/expiry/run           {}
     POST /api/v1/learn/run            {}
 
-Data directory
---------------
-All SQLite state lives under one directory, ``GC_DATA_DIR``
-(default: ``<system>/data``). The server rebinds the existing modules'
-path globals to that directory at startup, so the same code runs on the
-future VPS with its own journal:
-    journal.db            (signals + daily_count)
-    subs.db               (subscribers / pending / deliveries / audit)
+Data directory / store
+-----------------------
+State lives in the configured backend (``telegram_bot.backend``):
+``GC_STORE=supabase`` → Supabase tables (signals, subscribers, pending
+review, audit); anything else (default) → SQLite files under
+``GC_DATA_DIR`` (``journal.db``, ``subs.db``). The server rebinds the
+existing modules' path globals to ``GC_DATA_DIR`` at startup, so the
+SQLite backend and the file caches (parquet, charts, learned_weights)
+keep working unchanged:
+    journal.db            (SQLite backend only: signals + daily_count)
+    subs.db               (SQLite backend only: subscribers / pending / ...)
     bot_config.json       (channel, admins, mode — token_file inside it)
     .bot-token            (bot token, 600 — referenced by bot_config.json)
     learned_weights.json  (E2 output, read by the cycle)
@@ -45,9 +48,8 @@ Safety
 """
 import json
 import os
-import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
@@ -61,6 +63,7 @@ import audit as audit_log                       # noqa: E402
 import journal                                   # noqa: E402
 from agents import j1_journal                    # noqa: E402
 from telegram_bot import api as bot_api          # noqa: E402
+from telegram_bot import backend as bot_backend  # noqa: E402
 from telegram_bot import charts as bot_charts    # noqa: E402
 from telegram_bot import config as bot_config    # noqa: E402
 from telegram_bot import expiry as bot_expiry    # noqa: E402
@@ -168,59 +171,79 @@ def _require_key(x_api_key: str | None):
         raise HTTPException(status_code=401, detail="invalid or missing X-Api-Key")
 
 
-def _ro_count(db_path: Path, sql: str, args=()):
-    """Read-only count that never creates the file if it is missing."""
-    if not db_path.exists():
-        return None
+def _backend():
+    """The configured store (Supabase when GC_STORE=supabase, else SQLite).
+
+    All state reads/writes in this server go through it — a live cycle
+    must log the signal to the SAME store the review/settle steps read,
+    or the signal is split across two stores (the pre-patch bug: this
+    file called SQLite journal.log_signal while cycle/review/settle
+    already used the backend)."""
+    return bot_backend.get_backend()
+
+
+def _stats() -> dict:
     try:
-        c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        row = c.execute(sql, args).fetchone()
-        c.close()
-        return row[0] if row else 0
+        return _backend().stats()
     except Exception:
-        return None
+        return {}
 
 
 def _open_signals() -> int:
-    n = _ro_count(journal.DB, "SELECT COUNT(*) FROM signals WHERE status='open'")
-    return n if n is not None else 0
+    try:
+        return len(_backend().list_open_signals())
+    except Exception:
+        return 0
+
+
+def _pending_count() -> int:
+    try:
+        return _backend().count_pending()
+    except Exception:
+        return 0
 
 
 def _pending_row(signal_id: int):
-    """Pending row for a signal, or None. Never creates subs.db."""
-    if not bot_store.DB.exists():
-        return None
+    """Pending row for a signal (dict with status/card_text/chart_path), or None."""
     try:
-        c = sqlite3.connect(f"file:{bot_store.DB}?mode=ro", uri=True)
-        row = c.execute(
-            "SELECT status FROM pending WHERE signal_id=?", (signal_id,)).fetchone()
-        c.close()
-        return row
+        return _backend().get_pending(signal_id)
     except Exception:
         return None
+
+
+def _warned_count() -> int:
+    try:
+        return sum(1 for r in _backend().list_active_for_sweep()
+                   if r.get("warned"))
+    except Exception:
+        return 0
 
 
 def _expiry_snapshot():
     """(active, due_to_expire, due_to_warn) — read-only, no mutation."""
-    if not bot_store.DB.exists():
-        return 0, 0, 0
     try:
-        c = sqlite3.connect(f"file:{bot_store.DB}?mode=ro", uri=True)
-        now = datetime.now(timezone.utc).isoformat()
-        active = c.execute(
-            "SELECT COUNT(*) FROM subscribers WHERE status='active'").fetchone()[0]
-        due_exp = c.execute(
-            "SELECT COUNT(*) FROM subscribers WHERE status='active' "
-            "AND expires_at IS NOT NULL AND expires_at <= ?", (now,)).fetchone()[0]
-        due_warn = c.execute(
-            "SELECT COUNT(*) FROM subscribers WHERE status='active' AND warned=0 "
-            "AND expires_at IS NOT NULL AND expires_at > ? "
-            "AND expires_at <= datetime(?, '+3 days')",
-            (now, now)).fetchone()[0]
-        c.close()
-        return active, due_exp, due_warn
+        rows = _backend().list_active_for_sweep()
     except Exception:
         return 0, 0, 0
+    now = datetime.now(timezone.utc)
+    active = len(rows)
+    due_exp = 0
+    due_warn = 0
+    for r in rows:
+        exp = r.get("expires_at")
+        if not exp:
+            continue
+        try:
+            exp_dt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if exp_dt.tzinfo is None:
+            exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+        if exp_dt <= now:
+            due_exp += 1
+        elif not r.get("warned") and exp_dt <= now + timedelta(days=3):
+            due_warn += 1
+    return active, due_exp, due_warn
 
 
 # --- app ---------------------------------------------------------------------
@@ -230,18 +253,17 @@ app = FastAPI(title="Gold Council bot-server", version="1.0.0")
 @app.get("/healthz")
 def healthz():
     cfg = _cfg()
+    st = _stats()
     return {
         "status": "ok",
         "mode": "test" if TEST_MODE else "live",
+        "store": "supabase" if bot_backend.use_supabase() else "sqlite",
         "data_dir": str(DATA_DIR),
         "data_dir_exists": DATA_DIR.exists(),
         "configured": bool(cfg.configured),
-        "journal_signals": _ro_count(
-            journal.DB, "SELECT COUNT(*) FROM signals"),
-        "open_signals": _ro_count(
-            journal.DB, "SELECT COUNT(*) FROM signals WHERE status='open'"),
-        "pending_review": _ro_count(
-            bot_store.DB, "SELECT COUNT(*) FROM pending WHERE status='pending'"),
+        "closed_signals": st.get("closed", 0),
+        "open_signals": _open_signals(),
+        "pending_review": _pending_count(),
         "learn": LEARN_STATUS,
     }
 
@@ -293,7 +315,13 @@ def cycle_run(body: dict, x_api_key: str | None = Header(default=None)):
             "settled": 0, "expired": 0}
     if outcome == "signal":
         card = res["card"]
-        sid = journal.log_signal(card, res["verdict"].votes, mode="paper")
+        # Same call as telegram_bot/cycle.py: the backend logs the signal
+        # (+ votes + evaluations) to the CONFIGURED store, with the 3/day
+        # cap and the duplicate guard. Never journal.log_signal here — it
+        # is SQLite-only and would split state on Supabase.
+        sid = _backend().log_signal(card, res["verdict"].votes,
+                                    e1=res.get("e1"), m3=res.get("m3"),
+                                    r0=res.get("r0"), mode="paper")
         if sid == -1:
             resp.update(outcome="cap_reached", signal_id=None,
                         detail="daily cap (3/day) reached")
@@ -343,10 +371,10 @@ def publish_signal(signal_id: int, body: dict,
     row = _pending_row(signal_id)
     if not row:
         raise HTTPException(status_code=404, detail="signal not in review queue")
-    if row[0] not in ("pending", "approved"):
+    if row["status"] not in ("pending", "approved"):
         return JSONResponse(status_code=409, content={
             "published": False, "signal_id": signal_id,
-            "reason": f"already {row[0]}"})
+            "reason": f"already {row['status']}"})
     if TEST_MODE:
         return {"published": False, "signal_id": signal_id, "test_mode": True,
                 "detail": "test mode: publish not executed (no Telegram send)"}
@@ -362,18 +390,15 @@ def publish_signal(signal_id: int, body: dict,
         return JSONResponse(status_code=409, content={
             "published": False, "signal_id": signal_id,
             "reason": "approve failed"})
-    mid = _ro_count(bot_store.DB,
-                    "SELECT channel_message_id FROM deliveries WHERE signal_id=?",
-                    (signal_id,))
-    try:  # best-effort local audit of who approved (never breaks the publish)
-        with bot_store.conn() as c:
-            c.execute(
-                "INSERT INTO admin_audit(ts, admin_chat_id, action, target, detail, ok) "
-                "VALUES(?,?,?,?,?,1)",
-                (datetime.now(timezone.utc).isoformat(),
-                 int(approved_by) if isinstance(approved_by, int) else 0,
-                 f"api:approve:{signal_id}", str(signal_id),
-                 f"approved_by={approved_by}"))
+    mid = None
+    d = _backend().get_delivery(signal_id)
+    if d:
+        mid = d.get("channel_message_id")
+    try:  # best-effort audit of who approved (never breaks the publish)
+        _backend().audit(
+            int(approved_by) if isinstance(approved_by, int) else 0,
+            f"api:approve:{signal_id}", str(signal_id),
+            f"approved_by={approved_by}", ok=1)
     except Exception:
         pass
     return {"published": True, "signal_id": signal_id, "message_id": mid}
@@ -383,9 +408,12 @@ def publish_signal(signal_id: int, body: dict,
 def settle_run(body: dict, x_api_key: str | None = Header(default=None)):
     """Settle open signals — wraps telegram_bot.settle.settle()."""
     _require_key(x_api_key)
-    if not journal.DB.exists():
-        return {"settled": 0, "open_signals": 0, "note": "no journal yet"}
-    open_n = _open_signals()
+    try:
+        open_n = len(_backend().list_open_signals())
+    except Exception as e:
+        return JSONResponse(status_code=502, content={
+            "settled": 0, "open_signals": 0,
+            "detail": f"{type(e).__name__}: {e}"})
     if open_n == 0:
         return {"settled": 0, "open_signals": 0}
     if TEST_MODE:
@@ -409,8 +437,6 @@ def settle_run(body: dict, x_api_key: str | None = Header(default=None)):
 def expiry_run(body: dict, x_api_key: str | None = Header(default=None)):
     """Subscription expiry sweep — wraps telegram_bot.expiry.sweep()."""
     _require_key(x_api_key)
-    if not bot_store.DB.exists():
-        return {"expired": 0, "warned": 0, "active": 0, "note": "no store yet"}
     active, due_exp, due_warn = _expiry_snapshot()
     if TEST_MODE:
         return {"expired": 0, "warned": 0, "active": active,
@@ -423,8 +449,7 @@ def expiry_run(body: dict, x_api_key: str | None = Header(default=None)):
             "expired": 0, "warned": 0, "active": active,
             "reason": "not_configured"})
     before = _expiry_snapshot()
-    warned_before = _ro_count(bot_store.DB,
-                              "SELECT COUNT(*) FROM subscribers WHERE warned=1") or 0
+    warned_before = _warned_count()
     try:
         bot_expiry.sweep(_api(cfg), cfg)
     except Exception as e:
@@ -432,8 +457,7 @@ def expiry_run(body: dict, x_api_key: str | None = Header(default=None)):
             "expired": 0, "warned": 0, "active": active,
             "detail": f"{type(e).__name__}: {e}"})
     after = _expiry_snapshot()
-    warned_after = _ro_count(bot_store.DB,
-                             "SELECT COUNT(*) FROM subscribers WHERE warned=1") or 0
+    warned_after = _warned_count()
     return {"expired": before[0] - after[0],
             "warned": warned_after - warned_before,
             "active": after[0], "due_to_expire": due_exp}
