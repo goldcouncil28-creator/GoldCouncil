@@ -4,6 +4,8 @@ Public website for **Gold Council** (مجلس الذهب), Mohamed's paid Telegr
 signals bot for XAUUSD. Arabic RTL, dark theme. No auto-trading, ever — the
 bot gives documented recommendations only, never executes trades.
 
+Founded by **[Mohamed Nagy](https://github.com/SeniorMohamed)** — Founder, Designer & Principal Developer.
+
 ## Live data — Supabase (read-only)
 
 The site reads its numbers **live from Supabase** at page load (REST API,
