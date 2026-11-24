@@ -281,8 +281,10 @@ button{font-family:inherit;cursor:pointer}
 /* Video Showcase Box */
 .video-preview-box{
   position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--border);
-  background:#000;aspect-ratio:16 / 9;display:grid;place-items:center;
+  background:#000;aspect-ratio:9 / 16;width:min(100%,270px);max-height:480px;
+  justify-self:center;display:grid;place-items:center;
 }
+.video-preview-box video{width:100%;height:100%;object-fit:cover;display:block}
 .video-bg-placeholder{
   position:absolute;inset:0;
   background:radial-gradient(circle at center,rgba(255,196,77,.18) 0%,#060911 80%);
@@ -622,19 +624,13 @@ button{font-family:inherit;cursor:pointer}
     <div class="hud-panel">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center">
         <div class="video-preview-box">
-          <div class="video-bg-placeholder"></div>
-          <button class="play-btn-cyber" onclick="gcVideoSoon()">
-            ▶
-          </button>
-          <div style="position:absolute;bottom:12px;left:14px;font-family:var(--font-mono);font-size:10px;color:var(--gold)">
-            VIDEO: الفيديو التعريفي — قريباً
-          </div>
+          <video src="assets/gold-council-intro-vertical.mp4" poster="assets/video-poster.png" autoplay muted loop playsinline controls></video>
         </div>
         <div>
           <span class="hero-tag">OPERATIONAL VIDEO DEMO</span>
-          <h3 style="font-size:26px;font-weight:900;margin-bottom:12px">الفيديو التعريفي — قريباً</h3>
+          <h3 style="font-size:26px;font-weight:900;margin-bottom:12px">الفيديو التعريفي</h3>
           <p style="color:var(--muted);margin-bottom:20px;font-size:15px">
-            فيديو تعريفي قصير عن المجلس وطريقة عمل التوصيات — قيد الإعداد، وسيُنشر هنا فور جاهزيته.
+            فيديو تعريفي قصير عن المجلس وطريقة عمل التوصيات: 35 محللاً، رؤية موحدة، وسجل ورقي شفاف.
           </p>
           <div style="display:grid;gap:10px;font-family:var(--font-mono);font-size:13px">
             <div style="display:flex;align-items:center;gap:8px;color:var(--gold)">
@@ -1064,9 +1060,8 @@ const GC_I18N = {
   "✓ وقف خسارة صارم": "✓ Strict stop loss",
   "✓ أهداف محددة": "✓ Defined targets",
   "انضم الآن عبر التيليجرام ↗": "Join Now via Telegram ↗",
-  "VIDEO: الفيديو التعريفي — قريباً": "VIDEO: Intro video — coming soon",
-  "الفيديو التعريفي — قريباً": "Intro Video — Coming Soon",
-  "فيديو تعريفي قصير عن المجلس وطريقة عمل التوصيات — قيد الإعداد، وسيُنشر هنا فور جاهزيته.": "A short intro video about the Council and how signals work — in preparation, and will be published here as soon as it is ready.",
+  "الفيديو التعريفي": "Intro Video",
+  "فيديو تعريفي قصير عن المجلس وطريقة عمل التوصيات: 35 محللاً، رؤية موحدة، وسجل ورقي شفاف.": "A short intro video about the Council and how signals work: 35 analysts, one vision, and a transparent paper record.",
   "تنبيهات تيليجرام مع شارت مرفق لكل توصية": "Telegram alerts with an attached chart for every signal",
   "سجل ورقي موثق — الرابحة والخاسرة معروضتان": "Documented paper journal — winners and losers both shown",
   "سجل حقيقي وشفاف… حتى الخسارة معروضة قبل الربح": "A real, transparent journal… even losses are shown before wins",
